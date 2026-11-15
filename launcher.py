@@ -78,13 +78,13 @@ def main() -> int:
     try:
         import webview  # pywebview
         window = webview.create_window(
-            "E-Rechnung", url, width=1180, height=820, min_size=(800, 600),
+            "SmartRechnung", url, width=1180, height=820, min_size=(800, 600),
         )
         webview.start()
     except ImportError:
         # Fallback: System-Browser oeffnen und auf Strg+C warten
         webbrowser.open(url)
-        print(f"E-Rechnung laeuft auf {url}")
+        print(f"SmartRechnung laeuft auf {url}")
         print("Dieses Fenster geschlossen lassen, solange du die App nutzt.")
         print("Zum Beenden: dieses Fenster schliessen oder Strg+C druecken.")
         try:

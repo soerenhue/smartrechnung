@@ -1,4 +1,4 @@
-# E-Rechnung — Doppelklick, loslegen
+# SmartRechnung — Doppelklick, loslegen
 
 Kleine, kostenlose Desktop-App für Freiberufler und kleine Unternehmen: Du
 schreibst eine ganz normale Rechnung, die App erzeugt automatisch ein
@@ -13,9 +13,9 @@ niemand sieht deine Daten.
 ## So einfach ist es
 
 1. **Datei runterladen** für dein System
-   (Windows: `E-Rechnung-Windows.zip`, Mac: `E-Rechnung-macOS.zip`,
-   Linux: `E-Rechnung-Linux.tar.gz`).
-2. **Entpacken** und `E-Rechnung` doppelklicken. Es öffnet sich ein Fenster.
+   (Windows: `SmartRechnung-Windows.zip`, Mac: `SmartRechnung-macOS.zip`,
+   Linux: `SmartRechnung-Linux.tar.gz`).
+2. **Entpacken** und `SmartRechnung` doppelklicken. Es öffnet sich ein Fenster.
 3. **Firmendaten eintragen** (einmalig). Das sieht aus wie ein normales Formular.
 4. **Rechnung schreiben** — Empfänger, Positionen, Preise rein.
 5. Button „Rechnung erzeugen" → fertig. Du bekommst ein PDF, das gleichzeitig
@@ -47,11 +47,11 @@ du auch dort ein — ohne eine Datei anfassen zu müssen.
 
 ## Wo liegen deine Daten?
 
-Alles liegt lokal auf deinem Rechner in einem Ordner namens `E-Rechnung`:
+Alles liegt lokal auf deinem Rechner in einem Ordner namens `SmartRechnung`:
 
-- **Windows:** `C:\Users\<DeinName>\Documents\E-Rechnung`
-- **macOS:** `~/Documents/E-Rechnung`
-- **Linux:** `~/.local/share/E-Rechnung`
+- **Windows:** `C:\Users\<DeinName>\Documents\SmartRechnung`
+- **macOS:** `~/Documents/SmartRechnung`
+- **Linux:** `~/.local/share/SmartRechnung`
 
 Darin findest du:
 - `invoices/<Jahr>/<Nummer>.pdf` — deine erzeugten E-Rechnungen
@@ -103,7 +103,7 @@ GitHub-Release.
 
 1. Du taggst einmal `git tag v1.0.0 && git push --tags`.
 2. GitHub baut die drei Installer.
-3. Du schickst deinem Onkel den Link zu `E-Rechnung-Windows.zip`.
+3. Du schickst deinem Onkel den Link zu `SmartRechnung-Windows.zip`.
 4. Er entpackt, doppelklickt, trägt seine Firmendaten ein, schreibt Rechnungen.
 
 **Deine Rechnungen bleiben bei dir. Seine bleiben bei ihm.** Die Apps reden

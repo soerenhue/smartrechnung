@@ -33,7 +33,7 @@ def default_data_dir() -> Path:
         base = Path.home() / "Documents"
     else:
         base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    return (base / "E-Rechnung").resolve()
+    return (base / "SmartRechnung").resolve()
 
 
 DATA_DIR: Path = default_data_dir()
