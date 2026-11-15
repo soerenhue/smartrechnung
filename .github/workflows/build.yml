@@ -38,7 +38,12 @@ jobs:
 
       - name: Install system libs (macOS)
         if: runner.os == 'macOS'
-        run: brew install pango cairo gdk-pixbuf libffi
+        run: |
+          brew install pango cairo gdk-pixbuf libffi dylibbundler
+          # Die brew-Libs auf Apple Silicon liegen in /opt/homebrew/lib,
+          # auf Intel-Macs in /usr/local/lib. Beides fuer den Build verfuegbar machen.
+          echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:/usr/local/lib" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig" >> $GITHUB_ENV
 
       # macOS braucht .icns - wir generieren es aus den PNGs
       - name: Build macOS .icns
@@ -63,6 +68,28 @@ jobs:
 
       - name: Build with PyInstaller
         run: pyinstaller erechnung.spec --clean --noconfirm
+
+      # macOS: System-dylibs mit dylibbundler ins .app-Bundle kopieren
+      # damit SmartRechnung auf Rechnern ohne Homebrew laeuft
+      - name: Bundle dylibs (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          APP="dist/SmartRechnung.app"
+          if [ -d "$APP" ]; then
+            BIN="$APP/Contents/MacOS/SmartRechnung"
+            mkdir -p "$APP/Contents/Frameworks"
+            dylibbundler -od -b -x "$BIN" \
+              -d "$APP/Contents/Frameworks/" \
+              -p "@executable_path/../Frameworks/" || true
+            # Zusaetzlich alle schon gebundelten .dylib-Pfade pruefen
+            find "$APP/Contents" -name '*.dylib' | while read f; do
+              dylibbundler -of -b -x "$f" \
+                -d "$APP/Contents/Frameworks/" \
+                -p "@executable_path/../Frameworks/" 2>/dev/null || true
+            done
+            # ad-hoc-Signatur, sonst blockiert Gatekeeper die geaenderten Libs
+            codesign --force --deep --sign - "$APP" || true
+          fi
 
       - name: Package
         shell: bash

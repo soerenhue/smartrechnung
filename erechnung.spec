@@ -17,10 +17,14 @@ hidden += collect_submodules("weasyprint")
 hidden += collect_submodules("facturx")
 hidden += collect_submodules("uvicorn")
 hidden += collect_submodules("app")
+hidden += ["fastapi", "starlette", "jinja2", "sqlalchemy", "pydantic",
+           "lxml", "lxml.etree", "multipart", "email.mime", "email.mime.text"]
 
 datas = []
 datas += collect_data_files("weasyprint")
 datas += collect_data_files("facturx")
+datas += collect_data_files("fastapi")
+datas += collect_data_files("starlette")
 datas += [("app/templates", "app/templates")]
 
 # Platform-spezifisches Icon
@@ -40,7 +44,7 @@ a = Analysis(
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["tkinter"],
+    excludes=[],
 )
 pyz = PYZ(a.pure, a.zipped_data)
 
