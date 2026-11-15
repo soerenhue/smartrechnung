@@ -74,6 +74,25 @@ def _bootstrap_macos_libs() -> None:
   <alias><family>monospace</family><prefer>
     <family>DejaVu Sans Mono</family><family>Menlo</family><family>Monaco</family>
   </prefer></alias>
+
+  <!-- CATCH-ALL: Jeder Font-Lookup (egal welcher Name!) bekommt am Ende
+       automatisch DejaVu als Fallback drangehaengt. So crasht Pango NIE,
+       auch bei Vorlagen, die eine nicht-installierte Font referenzieren. -->
+  <match target="pattern">
+    <edit name="family" mode="append_last" binding="weak">
+      <string>DejaVu Sans</string>
+    </edit>
+  </match>
+  <match target="pattern">
+    <edit name="family" mode="append_last" binding="weak">
+      <string>Helvetica</string>
+    </edit>
+  </match>
+  <match target="pattern">
+    <edit name="family" mode="append_last" binding="weak">
+      <string>Arial</string>
+    </edit>
+  </match>
 </fontconfig>
 """
     user_fonts_conf.write_text(fonts_conf_text, encoding="utf-8")

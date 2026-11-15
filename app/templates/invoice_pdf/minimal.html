@@ -5,7 +5,8 @@
 <title>Rechnung {{ inv.invoice_number }}</title>
 <style>
   @page { size: A4; margin: 22mm 20mm; }
-  body { font-family: {{ branding.font_family }}; font-size: 10pt; color: {{ branding.text_color }}; margin: 0; }
+  body { font-family: {{ branding.font_family }}, "Helvetica Neue", Helvetica, Arial, "DejaVu Sans", sans-serif;
+         font-size: 10pt; color: {{ branding.text_color }}; margin: 0; }
   h1 { font-size: 16pt; font-weight: 500; margin: 0 0 8mm 0; color: {{ branding.primary_color }}; }
   .top { display: flex; justify-content: space-between; margin-bottom: 10mm; }
   .top .right { text-align: right; font-size: 9pt; color: {{ branding.muted_color }}; }

@@ -81,11 +81,22 @@ def render_invoice_pdf(inv: Invoice, company: Company) -> bytes:
 
         # Import erst hier, damit das Diag-Logging davor steht
         _diag("  Importiere weasyprint...")
-        from weasyprint import HTML  # noqa: PLC0415
+        from weasyprint import CSS, HTML  # noqa: PLC0415
         _diag("  weasyprint importiert")
 
-        _diag("  Rufe HTML(...).write_pdf() auf (hier crasht es bei Font-Problem)")
-        pdf_bytes = HTML(string=html_text, base_url=str(company.assets_dir)).write_pdf()
+        # Zusaetzliches Sicherheits-Stylesheet: zwingt bei JEDER Vorlage
+        # eine Font-Fallback-Kette durch, damit auch alte/importierte
+        # Vorlagen mit custom Font-Angaben nicht zum nativen Pango-Crash fuehren.
+        safety_css = CSS(string="""
+            html, body {
+                font-family: "Helvetica Neue", Helvetica, Arial, "DejaVu Sans", sans-serif;
+            }
+        """)
+
+        _diag("  Rufe HTML(...).write_pdf() auf")
+        pdf_bytes = HTML(string=html_text, base_url=str(company.assets_dir)).write_pdf(
+            stylesheets=[safety_css]
+        )
         _diag(f"  PDF-Erzeugung fertig, {len(pdf_bytes)} Bytes")
         return pdf_bytes
     except Exception:
