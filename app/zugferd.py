@@ -194,15 +194,16 @@ def build_xml(inv: Invoice) -> bytes:
 
 def embed_xml_in_pdf(pdf_bytes: bytes, xml_bytes: bytes, out_path: Path) -> None:
     """Bettet das ZUGFeRD-XML als 'factur-x.xml' in das PDF ein und schreibt
-    das Ergebnis als PDF/A-3 nach out_path."""
-    out = BytesIO()
-    generate_from_binary(
+    das Ergebnis als PDF/A-3 nach out_path.
+
+    factur-x 3.x: generate_from_binary() gibt die fertigen PDF-Bytes direkt
+    zurueck; das alte output_pdf-Keyword wurde entfernt."""
+    output_bytes = generate_from_binary(
         pdf_bytes,
         xml_bytes,
-        output_pdf=out,
         afrelationship="Data",
         attachment_filename="factur-x.xml",
         flavor="factur-x",
         level="en16931",
     )
-    out_path.write_bytes(out.getvalue())
+    out_path.write_bytes(output_bytes)
