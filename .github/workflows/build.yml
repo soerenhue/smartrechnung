@@ -120,19 +120,53 @@ jobs:
           for f in "$FRAMEWORKS"/*.dylib; do
             dylibbundler -of -b -x "$f" -d "$FRAMEWORKS/" -p "@executable_path/../Frameworks/" 2>/dev/null || true
           done
-          # Sicherstellen, dass die install_name und Pfade aller gebundelten Libs
-          # auf @executable_path/../Frameworks/ zeigen (sonst scheitert ctypes)
-          for f in "$FRAMEWORKS"/*.dylib; do
-            install_name_tool -id "@executable_path/../Frameworks/$(basename $f)" "$f" 2>/dev/null || true
+          # KRITISCH: Duplikate zu Symlinks machen, damit libpango/libgobject
+          # etc. physisch nur EINMAL im Bundle liegen. Sonst wird z.B.
+          # libpango-1.0.0.dylib ueber einen Pfad geladen und libpango-1.0.dylib
+          # ueber einen anderen - GType registriert PangoFontMap zweimal
+          # -> 'cannot register existing type' -> nativer Crash in write_pdf().
+          cd "$FRAMEWORKS"
+          echo "=== Vor Dedup: $(ls *.dylib 2>/dev/null | wc -l) dylib-Dateien ==="
+
+          # Schritt 1: Alle unversionierten Varianten (libX.dylib ohne Zahl davor)
+          # loeschen, falls eine versionierte Variante existiert.
+          for f in *.dylib; do
+            [ -L "$f" ] && continue  # bereits Symlink - OK
+            if ! [[ "$f" =~ \.[0-9]+\.dylib$ ]]; then
+              # Unversioniert - pruefe ob versionierte Variante existiert
+              stem="${f%.dylib}"
+              for v in "${stem}".*.dylib; do
+                if [ -f "$v" ] && [ "$v" != "$f" ]; then
+                  rm -f "$f"
+                  break
+                fi
+              done
+            fi
           done
 
-          # Diagnose: welche externen Libraries referenzieren die gebundelten
-          # Libs noch? Alles, was NICHT auf @executable_path/@rpath/@loader_path
-          # oder /System/Library zeigt, ist ein potenzielles Problem.
-          echo "=== Externe Lib-Referenzen (sollten leer oder System sein) ==="
+          # Schritt 2: Fuer jede versionierte Lib einen Symlink ohne Version
+          # erstellen (libpango-1.0.0.dylib -> libpango-1.0.dylib Symlink).
+          # So finden Programme, die nach dem unversionierten Namen suchen,
+          # dieselbe physische Datei.
+          for f in *.dylib; do
+            [ -L "$f" ] && continue
+            if [[ "$f" =~ ^(.+)\.[0-9]+\.dylib$ ]]; then
+              stem="${BASH_REMATCH[1]}"
+              short="${stem}.dylib"
+              if [ ! -e "$short" ]; then
+                ln -sf "$f" "$short"
+              fi
+            fi
+          done
+
+          echo "=== Nach Dedup: $(ls *.dylib 2>/dev/null | wc -l) Eintraege (davon Symlinks: $(ls -la *.dylib 2>/dev/null | grep -c '^l')) ==="
+          cd -
+
+          # install_name auf allen echten Dateien setzen (Symlinks ueberspringen)
           for f in "$FRAMEWORKS"/*.dylib; do
-            otool -L "$f" 2>/dev/null | grep -Ev "@executable_path|@rpath|@loader_path|/System/Library|/usr/lib" | grep -v "^$f:" | head -5
-          done | sort -u | head -40
+            [ -L "$f" ] && continue
+            install_name_tool -id "@executable_path/../Frameworks/$(basename $f)" "$f" 2>/dev/null || true
+          done
 
           # Eigene fonts.conf nach Contents/Resources kopieren
           # (zeigt auf macOS-Systemschriften statt auf Homebrew-Pfade)
