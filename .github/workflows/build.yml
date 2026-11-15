@@ -108,11 +108,18 @@ jobs:
           echo "=== Kopierte Libs: ==="
           ls -1 "$FRAMEWORKS" | head -40
 
-          # Jetzt alle transitiven Abhaengigkeiten umbiegen auf @executable_path/../Frameworks/
+          # Jetzt transitive Abhaengigkeiten ergaenzen und IDs umbiegen.
+          # ACHTUNG: KEIN -od! Das wuerde Frameworks/ zuerst leeren und unsere
+          # vorher kopierten dlopen-only-Libs (gobject etc.) wieder entfernen.
           BIN="$APP/Contents/MacOS/SmartRechnung"
-          dylibbundler -od -b -x "$BIN" -d "$FRAMEWORKS/" -p "@executable_path/../Frameworks/" || true
+          dylibbundler -b -x "$BIN" -d "$FRAMEWORKS/" -p "@executable_path/../Frameworks/" || true
           for f in "$FRAMEWORKS"/*.dylib; do
             dylibbundler -of -b -x "$f" -d "$FRAMEWORKS/" -p "@executable_path/../Frameworks/" 2>/dev/null || true
+          done
+          # Sicherstellen, dass die install_name und Pfade aller gebundelten Libs
+          # auf @executable_path/../Frameworks/ zeigen (sonst scheitert ctypes)
+          for f in "$FRAMEWORKS"/*.dylib; do
+            install_name_tool -id "@executable_path/../Frameworks/$(basename $f)" "$f" 2>/dev/null || true
           done
 
           # Ad-hoc signieren, sonst blockt macOS die umgeschriebenen Libs
