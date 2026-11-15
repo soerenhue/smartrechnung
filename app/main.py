@@ -1,32 +1,27 @@
-"""FastAPI-App - wird vom Desktop-Launcher gestartet.
-
-Oeffnet beim ersten Start einen Einrichtungs-Assistenten; danach stehen zwei
-Pfade bereit: Rechnung in der App erzeugen oder bestehendes PDF hochladen und
-E-Rechnung daraus machen.
-"""
+"""FastAPI-App - Multi-Firma-Desktop-Variante."""
 
 from __future__ import annotations
 
 import io
 import zipfile
-from pathlib import Path
-
 from datetime import date
+from pathlib import Path
+from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import config
-from .branding import (
-    BRANDING_ASSETS_DIR, TEMPLATES_DIR, ensure_initialized,
-    list_templates, load_branding, save_branding,
+from . import validator as preflight
+from .branding import load_branding, save_branding, list_templates
+from .config import (
+    COMPANIES_DIR, Company, create_company, delete_company,
+    get_company, list_companies, settings as _cfg,
 )
-from .config import DATA_DIR, is_configured, load_seller, save_seller
 from .db import Base, engine, get_db
 from .models import Invoice
 from .schemas import InvoiceIn, InvoiceItemIn
@@ -37,20 +32,51 @@ from .service import (
 
 
 Base.metadata.create_all(bind=engine)
-ensure_initialized()
+
+# Legacy-Schema-Migration: fehlende Spalten nachtragen (einmaliger Upgrade-Pfad)
+with engine.begin() as conn:
+    cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(invoices)").fetchall()}
+    if "company_slug" not in cols:
+        conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN company_slug VARCHAR(128) DEFAULT ''")
+    if "tax_regime" not in cols:
+        conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN tax_regime VARCHAR(32) DEFAULT 'regular'")
+    if "reverse_charge" not in cols:
+        conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN reverse_charge BOOLEAN DEFAULT 0")
+
 
 app = FastAPI(title="E-Rechnung", docs_url=None, redoc_url=None, openapi_url=None)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-app.mount("/branding", StaticFiles(directory=str(BRANDING_ASSETS_DIR)), name="branding")
+
+# Logos & Assets aller Firmen bereitstellen
+app.mount("/data", StaticFiles(directory=str(COMPANIES_DIR)), name="data")
 
 
-# --- Freundliche Fehlerseite (statt FastAPI-Standard-JSON) --------------
-def _err_page(request: Request, title: str, message: str, status_code: int = 400):
-    return templates.TemplateResponse(
-        "error.html",
-        {"request": request, "title": title, "message": message, "branding": load_branding()},
-        status_code=status_code,
-    )
+# --- Aktive Firma (Cookie) ----------------------------------------------
+ACTIVE_COOKIE = "active_company"
+
+
+def active_company(request: Request) -> Optional[Company]:
+    slug = request.cookies.get(ACTIVE_COOKIE)
+    if slug:
+        c = get_company(slug)
+        if c:
+            return c
+    cs = list_companies()
+    return cs[0] if cs else None
+
+
+def _render(request: Request, template: str, ctx: dict, status_code: int = 200):
+    ctx.setdefault("request", request)
+    ctx.setdefault("active", active_company(request))
+    ctx.setdefault("companies", list_companies())
+    ctx.setdefault("branding", load_branding(ctx["active"]) if ctx["active"] else {})
+    return templates.TemplateResponse(template, ctx, status_code=status_code)
+
+
+# --- Fehlerseiten -------------------------------------------------------
+def _err_page(request: Request, title: str, message: str, code: int = 400):
+    return _render(request, "error.html",
+                   {"title": title, "message": message}, status_code=code)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -68,7 +94,7 @@ async def validation_err(request: Request, exc: RequestValidationError):
     loc = " - ".join(str(x) for x in first.get("loc", []))
     msg = first.get("msg", "Eingabe ungueltig.")
     return _err_page(request, "Eingabe nicht vollstaendig",
-                     f"Bitte prufe das Feld: {loc}. ({msg})", 400)
+                     f"Bitte pruefe das Feld: {loc}. ({msg})", 400)
 
 
 @app.exception_handler(Exception)
@@ -76,43 +102,93 @@ async def unexpected_err(request: Request, exc: Exception):
     return _err_page(
         request, "Technischer Fehler",
         f"Etwas ist unerwartet schiefgelaufen: {type(exc).__name__}. "
-        "Du kannst auf 'Zurueck' klicken und es nochmal versuchen. "
-        "Deine bisherigen Rechnungen sind in jedem Fall sicher gespeichert.",
+        "Deine bisherigen Rechnungen sind sicher gespeichert.",
         500,
     )
 
 
-# --- Einrichtungs-Zwang --------------------------------------------------
-@app.middleware("http")
-async def force_setup(request: Request, call_next):
-    """Vor dem Haupt-UI wird ein Einrichtungs-Assistent erzwungen, solange die
-    Firmendaten noch nicht gesetzt sind. Statische Dateien und der Assistent
-    selbst duerfen durch."""
-    path = request.url.path
-    whitelisted = (
-        path.startswith("/einrichtung")
-        or path.startswith("/branding")
-        or path.startswith("/favicon")
+# --- Startseite / Weiche --------------------------------------------------
+@app.get("/")
+def index(request: Request, db: Session = Depends(get_db)):
+    companies = list_companies()
+    if not companies:
+        return RedirectResponse("/firmen/neu?first=1", status_code=303)
+    c = active_company(request) or companies[0]
+    if not c.is_configured():
+        return RedirectResponse(f"/firmen/{c.slug}", status_code=303)
+
+    invoices = (
+        db.query(Invoice)
+        .filter(Invoice.company_slug == c.slug)
+        .order_by(Invoice.issue_date.desc(), Invoice.id.desc())
+        .all()
     )
-    if not is_configured() and not whitelisted:
-        return RedirectResponse("/einrichtung", status_code=303)
-    return await call_next(request)
+    chain_issues = verify_chain(db, c)
+    return _render(request, "invoice_list.html",
+                   {"invoices": invoices, "chain_issues": chain_issues})
 
 
-# --- Einrichtungs-Assistent ----------------------------------------------
-@app.get("/einrichtung", response_class=HTMLResponse)
-def setup_form(request: Request):
-    return templates.TemplateResponse(
-        "setup.html",
-        {"request": request, "branding": load_branding(), "seller": load_seller(),
-         "done": is_configured()},
-    )
-
-
-@app.post("/einrichtung")
-async def setup_save(request: Request):
+# --- Firmen-Umschalter ---------------------------------------------------
+@app.post("/firma/wechseln")
+async def switch_company(request: Request):
     form = await request.form()
-    save_seller({
+    slug = form.get("slug", "")
+    resp = RedirectResponse("/", status_code=303)
+    if get_company(slug):
+        resp.set_cookie(ACTIVE_COOKIE, slug, max_age=60 * 60 * 24 * 365, httponly=True)
+    return resp
+
+
+# --- Firmen-Verwaltung ---------------------------------------------------
+@app.get("/firmen")
+def companies_page(request: Request):
+    return _render(request, "companies.html", {})
+
+
+@app.get("/firmen/neu")
+def company_new_form(request: Request):
+    return _render(
+        request, "company_form.html",
+        {"form_action": "/firmen/neu", "company": None,
+         "is_first": request.query_params.get("first") == "1"},
+    )
+
+
+@app.post("/firmen/neu")
+async def company_new_save(request: Request):
+    form = await request.form()
+    data = {k: form.get(k) for k in form}
+    data["next_number"] = form.get("next_number") or 1
+    try:
+        c = create_company(data)
+    except ValueError as e:
+        return _err_page(request, "Firma konnte nicht angelegt werden", str(e), 400)
+    resp = RedirectResponse("/", status_code=303)
+    resp.set_cookie(ACTIVE_COOKIE, c.slug, max_age=60 * 60 * 24 * 365, httponly=True)
+    return resp
+
+
+@app.get("/firmen/{slug}")
+def company_edit_form(slug: str, request: Request):
+    c = get_company(slug)
+    if not c:
+        raise HTTPException(404)
+    return _render(
+        request, "company_form.html",
+        {"form_action": f"/firmen/{slug}", "company": c, "is_first": False,
+         "template_list": list_templates(c),
+         "branding_for_form": load_branding(c)},
+    )
+
+
+@app.post("/firmen/{slug}")
+async def company_edit_save(slug: str, request: Request):
+    c = get_company(slug)
+    if not c:
+        raise HTTPException(404)
+    form = await request.form()
+    c.update({
+        "display_name": form.get("display_name"),
         "seller_name": form.get("seller_name"),
         "seller_street": form.get("seller_street"),
         "seller_postcode": form.get("seller_postcode"),
@@ -124,53 +200,65 @@ async def setup_save(request: Request):
         "seller_iban": form.get("seller_iban"),
         "seller_bic": form.get("seller_bic"),
         "seller_bank": form.get("seller_bank"),
+        "number_format": form.get("number_format") or "{year}-{nn:03d}",
+        "next_number": form.get("next_number") or 1,
+        "tax_regime": form.get("tax_regime") or "regular",
+        "reverse_charge_default": bool(form.get("reverse_charge_default")),
     })
-    return RedirectResponse("/", status_code=303)
+
+    # Branding speichern
+    save_branding(c, {
+        "template": form.get("template") or "standard.html",
+        "primary_color": form.get("primary_color") or "#1e3a8a",
+        "accent_color": form.get("accent_color") or "#3b82f6",
+        "text_color": form.get("text_color") or "#111827",
+        "muted_color": form.get("muted_color") or "#6b7280",
+        "font_family": form.get("font_family") or "DejaVu Sans, sans-serif",
+        "footer_line_1": form.get("footer_line_1") or "",
+        "footer_line_2": form.get("footer_line_2") or "",
+        "footer_line_3": form.get("footer_line_3") or "",
+    })
+
+    logo = form.get("logo")
+    if hasattr(logo, "filename") and logo.filename:
+        safe = Path(logo.filename).name
+        (c.assets_dir / safe).write_bytes(await logo.read())
+        current = load_branding(c)
+        current["logo_filename"] = safe
+        save_branding(c, current)
+
+    return RedirectResponse(f"/firmen/{slug}", status_code=303)
 
 
-# --- Rechnungsliste ------------------------------------------------------
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request, db: Session = Depends(get_db)):
-    invoices = db.query(Invoice).order_by(Invoice.issue_date.desc(), Invoice.id.desc()).all()
-    chain_issues = verify_chain(db)
-    return templates.TemplateResponse(
-        "invoice_list.html",
-        {"request": request, "invoices": invoices, "chain_issues": chain_issues,
-         "branding": load_branding()},
-    )
+@app.post("/firmen/{slug}/loeschen")
+def company_delete(slug: str, request: Request):
+    delete_company(slug)
+    resp = RedirectResponse("/firmen", status_code=303)
+    if request.cookies.get(ACTIVE_COOKIE) == slug:
+        resp.delete_cookie(ACTIVE_COOKIE)
+    return resp
 
 
-# --- Rechnung anlegen (zwei Modi) ----------------------------------------
-def _suggest_next_number(db: Session) -> str:
-    """Schlaegt die naechste Rechnungsnummer vor: 2026-001, 2026-002, ..."""
-    year = date.today().year
-    prefix = f"{year}-"
-    last = (
-        db.query(Invoice)
-        .filter(Invoice.invoice_number.like(f"{prefix}%"))
-        .order_by(Invoice.id.desc())
-        .first()
-    )
-    if not last:
-        return f"{prefix}001"
-    try:
-        n = int(last.invoice_number.split("-", 1)[1]) + 1
-    except (ValueError, IndexError):
-        n = db.query(Invoice).count() + 1
-    return f"{prefix}{n:03d}"
+# --- Rechnung anlegen ----------------------------------------------------
+def _suggest_next_number(db: Session, c: Company) -> str:
+    return c.format_next_number()
 
 
-@app.get("/neu", response_class=HTMLResponse)
+@app.get("/neu")
 def new_invoice_form(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse(
-        "invoice_form.html",
-        {"request": request, "branding": load_branding(), "seller": load_seller(),
-         "suggested_number": _suggest_next_number(db)},
+    c = active_company(request)
+    if not c:
+        return RedirectResponse("/firmen/neu?first=1", status_code=303)
+    if not c.is_configured():
+        return RedirectResponse(f"/firmen/{c.slug}", status_code=303)
+    return _render(
+        request, "invoice_form.html",
+        {"suggested_number": _suggest_next_number(db, c)},
     )
 
 
 def _parse_items(form) -> list[InvoiceItemIn]:
-    items: list[InvoiceItemIn] = []
+    items = []
     i = 1
     while f"desc_{i}" in form:
         desc = (form.get(f"desc_{i}") or "").strip()
@@ -203,52 +291,75 @@ def _parse_invoice_in(form) -> InvoiceIn:
         items=_parse_items(form),
         notes=form.get("notes") or "",
         payment_terms=form.get("payment_terms") or "Zahlbar innerhalb von 14 Tagen ohne Abzug.",
+        reverse_charge=bool(form.get("reverse_charge")),
     )
 
 
 @app.post("/neu")
 async def new_invoice_submit(request: Request, db: Session = Depends(get_db)):
+    c = active_company(request)
+    if not c:
+        raise HTTPException(400, "Keine Firma ausgewaehlt.")
+
     form = await request.form()
     mode = form.get("mode", "generate")
 
     items = _parse_items(form)
     if not items:
-        raise HTTPException(400, "Mindestens eine Rechnungsposition erforderlich.")
+        return _err_page(request, "Rechnung unvollstaendig",
+                         "Bitte mindestens eine Rechnungsposition eintragen.", 400)
 
     try:
         data = _parse_invoice_in(form)
     except Exception as e:
-        raise HTTPException(400, f"Ungueltige Eingabe: {e}")
+        return _err_page(request, "Eingabe ungueltig", str(e), 400)
+
+    # Pflicht-Check VOR dem Erzeugen
+    issues = preflight.check_company(c) + preflight.check_invoice(data, c)
+    if issues:
+        return _render(request, "error.html", {
+            "title": "Diese Rechnung waere nicht rechtskonform",
+            "message": "Bitte korrigiere die folgenden Punkte:",
+            "issues": issues,
+        }, status_code=400)
+
+    # Pflichthinweis automatisch in notes ergaenzen (falls nicht schon enthalten)
+    notice = preflight.mandatory_notice(c, data.reverse_charge)
+    if notice and notice not in data.notes:
+        data.notes = (data.notes + ("\n\n" if data.notes else "") + notice).strip()
 
     try:
         if mode == "upload":
             upload = form.get("pdf_file")
             if not hasattr(upload, "filename") or not upload.filename:
-                raise HTTPException(400, "Bitte eine PDF-Datei auswaehlen.")
+                return _err_page(request, "PDF fehlt", "Bitte eine PDF-Datei auswaehlen.", 400)
             pdf_bytes = await upload.read()
-            inv = create_invoice_from_pdf(db, data, pdf_bytes)
+            inv = create_invoice_from_pdf(db, data, c, pdf_bytes)
         else:
-            inv = create_invoice(db, data)
+            inv = create_invoice(db, data, c)
+
+        # Steuerregime + Reverse-Charge auf der Rechnung mitspeichern
+        inv.tax_regime = c.tax_regime
+        inv.reverse_charge = data.reverse_charge
+        db.commit()
+
     except InvoiceNumberTakenError as e:
-        raise HTTPException(409, str(e))
+        return _err_page(request, "Rechnungsnummer bereits vergeben", str(e), 409)
     except SellerNotConfiguredError as e:
-        raise HTTPException(400, str(e))
+        return _err_page(request, "Firma nicht vollstaendig eingerichtet", str(e), 400)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        return _err_page(request, "Ungueltige Eingabe", str(e), 400)
 
     return RedirectResponse(f"/rechnung/{inv.id}", status_code=303)
 
 
 # --- Details, Downloads --------------------------------------------------
-@app.get("/rechnung/{inv_id}", response_class=HTMLResponse)
+@app.get("/rechnung/{inv_id}")
 def invoice_detail(inv_id: int, request: Request, db: Session = Depends(get_db)):
     inv = db.get(Invoice, inv_id)
     if not inv:
         raise HTTPException(404)
-    return templates.TemplateResponse(
-        "invoice_detail.html",
-        {"request": request, "inv": inv, "branding": load_branding()},
-    )
+    return _render(request, "invoice_detail.html", {"inv": inv})
 
 
 @app.get("/rechnung/{inv_id}/pdf")
@@ -256,7 +367,7 @@ def invoice_pdf(inv_id: int, db: Session = Depends(get_db)):
     inv = db.get(Invoice, inv_id)
     if not inv or not inv.pdf_path:
         raise HTTPException(404)
-    full = Path(DATA_DIR) / inv.pdf_path
+    full = Path(_cfg.data_dir) / inv.pdf_path
     return FileResponse(full, media_type="application/pdf", filename=full.name)
 
 
@@ -265,100 +376,45 @@ def invoice_xml(inv_id: int, db: Session = Depends(get_db)):
     inv = db.get(Invoice, inv_id)
     if not inv or not inv.xml_path:
         raise HTTPException(404)
-    full = Path(DATA_DIR) / inv.xml_path
+    full = Path(_cfg.data_dir) / inv.xml_path
     return FileResponse(full, media_type="application/xml", filename=full.name)
 
 
-# --- Einstellungen (Branding + Firmendaten) ------------------------------
-@app.get("/einstellungen", response_class=HTMLResponse)
-def settings_page(request: Request):
-    return templates.TemplateResponse(
-        "settings.html",
-        {"request": request, "branding": load_branding(),
-         "templates": list_templates(), "seller": load_seller(),
-         "data_dir": str(DATA_DIR)},
-    )
-
-
-@app.post("/einstellungen")
-async def settings_save(request: Request):
-    form = await request.form()
-
-    # Branding
-    save_branding({
-        "template": form.get("template") or "standard.html",
-        "primary_color": form.get("primary_color") or "#1e3a8a",
-        "accent_color": form.get("accent_color") or "#3b82f6",
-        "text_color": form.get("text_color") or "#111827",
-        "muted_color": form.get("muted_color") or "#6b7280",
-        "font_family": form.get("font_family") or "DejaVu Sans, sans-serif",
-        "footer_line_1": form.get("footer_line_1") or "",
-        "footer_line_2": form.get("footer_line_2") or "",
-        "footer_line_3": form.get("footer_line_3") or "",
-    })
-
-    # Firmendaten
-    save_seller({
-        "seller_name": form.get("seller_name"),
-        "seller_street": form.get("seller_street"),
-        "seller_postcode": form.get("seller_postcode"),
-        "seller_city": form.get("seller_city"),
-        "seller_country": form.get("seller_country") or "DE",
-        "seller_tax_id": form.get("seller_tax_id"),
-        "seller_tax_number": form.get("seller_tax_number"),
-        "seller_email": form.get("seller_email"),
-        "seller_iban": form.get("seller_iban"),
-        "seller_bic": form.get("seller_bic"),
-        "seller_bank": form.get("seller_bank"),
-    })
-
-    # Logo-Upload
-    logo = form.get("logo")
-    if hasattr(logo, "filename") and logo.filename:
-        safe = Path(logo.filename).name
-        target = BRANDING_ASSETS_DIR / safe
-        target.write_bytes(await logo.read())
-        current = load_branding()
-        current["logo_filename"] = safe
-        save_branding(current)
-
-    return RedirectResponse("/einstellungen", status_code=303)
-
-
-# --- GoBD-Export ---------------------------------------------------------
+# --- GoBD-Export (pro Firma) ---------------------------------------------
 @app.get("/export/gobd")
-def gobd_export(db: Session = Depends(get_db)):
+def gobd_export(request: Request, db: Session = Depends(get_db)):
+    c = active_company(request)
+    if not c:
+        raise HTTPException(400, "Keine Firma ausgewaehlt.")
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for inv in db.query(Invoice).order_by(Invoice.id.asc()).all():
+        rows = db.query(Invoice).filter(Invoice.company_slug == c.slug).order_by(Invoice.id.asc()).all()
+        for inv in rows:
             for rel in (inv.pdf_path, inv.xml_path):
                 if rel:
-                    full = Path(DATA_DIR) / rel
+                    full = Path(_cfg.data_dir) / rel
                     if full.exists():
                         zf.write(full, arcname=rel)
         lines = ["invoice_number;issue_date;content_hash;prev_hash;chain_hash;pdf_path;xml_path"]
-        for inv in db.query(Invoice).order_by(Invoice.id.asc()).all():
+        for inv in rows:
             lines.append(";".join([
                 inv.invoice_number, inv.issue_date.isoformat(),
                 inv.content_hash, inv.prev_hash, inv.chain_hash,
                 inv.pdf_path, inv.xml_path,
             ]))
         zf.writestr("hash-protokoll.csv", "\n".join(lines))
-        zf.writestr("verfahrensdokumentation.md", _verfahrensdoku())
-        issues = verify_chain(db)
-        zf.writestr(
-            "chain-verification.txt",
-            "OK - alle Hashes konsistent\n" if not issues else "\n".join(str(i) for i in issues),
-        )
+        zf.writestr("verfahrensdokumentation.md", _verfahrensdoku(c))
+        issues = verify_chain(db, c)
+        zf.writestr("chain-verification.txt",
+                    "OK - alle Hashes konsistent\n" if not issues else "\n".join(str(i) for i in issues))
     return Response(
-        content=buf.getvalue(),
-        media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="gobd-export.zip"'},
+        content=buf.getvalue(), media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="gobd-export-{c.slug}.zip"'},
     )
 
 
-def _verfahrensdoku() -> str:
-    s = load_seller()
+def _verfahrensdoku(c: Company) -> str:
     return f"""# Verfahrensdokumentation (GoBD-Kurzform)
 
 ## System
@@ -367,25 +423,24 @@ Hybrid-PDF (PDF/A-3 mit eingebettetem factur-x.xml) nach ZUGFeRD 2.x /
 EN 16931 erzeugt.
 
 ## Erfassung
-Erfassung ueber Web-Formular (im lokalen Browserfenster der Desktop-App).
-Pflichtangaben nach UStG § 14 werden technisch erzwungen; Rechnungsnummern
-sind eindeutig.
+Erfassung ueber Web-Formular im lokalen Browserfenster. Pflichtangaben nach
+UStG § 14 werden technisch vor dem Erzeugen geprueft; Rechnungsnummern sind
+pro Firma eindeutig.
 
 ## Unveraenderbarkeit
 Jede Rechnung erhaelt einen SHA-256-Hash ueber ihren normalisierten Inhalt.
-Dieser Hash wird mit dem Hash der vorherigen Rechnung verkettet (chain_hash).
-Jede nachtraegliche Aenderung bricht die Kette und wird in der Oberflaeche
-rot hervorgehoben.
+Dieser Hash wird mit dem Hash der vorherigen Rechnung derselben Firma
+verkettet. Jede nachtraegliche Aenderung bricht die Kette und wird in der
+Oberflaeche rot hervorgehoben.
 
 ## Aufbewahrung
-PDF und XML pro Rechnung: data/invoices/<Jahr>/<Nummer>.*. Frist: 10 Jahre.
+PDF und XML pro Rechnung: data/companies/{c.slug}/invoices/<Jahr>/<Nummer>.*.
+Frist: 10 Jahre.
 
-## Pruefbarkeit
-Das ZIP-Archiv "gobd-export.zip" enthaelt alle Belege, das Hash-Protokoll und
-diese Verfahrensdokumentation.
-
-## Betreiber
-Seller: {s['seller_name']}
-Anschrift: {s['seller_street']}, {s['seller_postcode']} {s['seller_city']}
-USt-IdNr: {s['seller_tax_id']}
+## Betreiber dieser Firma
+Firma: {c.seller_name}
+Anschrift: {c.seller_street}, {c.seller_postcode} {c.seller_city}
+USt-IdNr: {c.seller_tax_id}
+Steuernummer: {c.seller_tax_number}
+Steuerregime: {c.tax_regime}
 """

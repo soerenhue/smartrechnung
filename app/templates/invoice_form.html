@@ -69,6 +69,23 @@
     <p><button type="button" class="btn btn-secondary" onclick="addRow()">+ Position hinzufuegen</button></p>
 
     <h3>Weitere Angaben</h3>
+    {% if active.tax_regime == 'regular' %}
+    <div style="background:#f3f4f6; padding:10px; border-radius:6px; margin-bottom:12px">
+      <label><input type="checkbox" name="reverse_charge" value="1"> Reverse Charge
+        (Steuerschuld geht auf den Leistungsempfaenger ueber - alle Positionen 0% USt)</label>
+    </div>
+    {% elif active.tax_regime == 'small_business' %}
+    <div style="background:#fef3c7; padding:10px; border-radius:6px; margin-bottom:12px" class="muted">
+      <strong>Kleinunternehmer (§ 19 UStG):</strong> Diese Firma weist keine
+      Umsatzsteuer aus. Bitte bei allen Positionen 0 % USt eintragen - der
+      Pflichthinweis wird automatisch auf die Rechnung geschrieben.
+    </div>
+    {% elif active.tax_regime == 'vat_exempt' %}
+    <div style="background:#fef3c7; padding:10px; border-radius:6px; margin-bottom:12px" class="muted">
+      <strong>Umsatzsteuerbefreit:</strong> Diese Firma weist keine Umsatzsteuer
+      aus. Alle Positionen mit 0 % USt.
+    </div>
+    {% endif %}
     <div><label>Zahlungsbedingungen</label>
       <input name="payment_terms" value="Zahlbar innerhalb von 14 Tagen ohne Abzug."></div>
     <div><label>Anmerkungen / Freitext auf der Rechnung</label>

@@ -1,11 +1,7 @@
-"""Service-Schicht: Orchestriert die Erstellung einer Rechnung.
+"""Service-Schicht: Rechnungserstellung, immer scoped auf eine aktive Firma.
 
-Zwei Wege:
-  * create_invoice(db, data)                 -> PDF selbst rendern + XML einbetten
-  * create_invoice_from_pdf(db, data, pdf)   -> PDF uebernehmen + XML einbetten
-
-Beide schreiben die Rechnung mit SHA-256-Hash-Chain in die DB und legen die
-Dateien unter data/invoices/<Jahr>/<Nummer>.* ab (GoBD).
+Hash-Chain laeuft pro Firma. Nummernkreis ebenso. Dateien landen unter
+data/companies/<firma>/invoices/<Jahr>/<Nummer>.*
 """
 
 from __future__ import annotations
@@ -16,7 +12,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from .config import DATA_DIR, load_seller
+from .config import Company
 from .hashing import chain_hash, content_hash, file_sha256
 from .models import AuditLog, Invoice, InvoiceItem
 from .pdf import render_invoice_pdf
@@ -55,27 +51,35 @@ def _invoice_payload(inv: Invoice) -> dict:
     }
 
 
-def _last_chain_hash(db: Session) -> str:
-    row = db.query(Invoice).order_by(Invoice.id.desc()).first()
+def _last_chain_hash_for(db: Session, company: Company) -> str:
+    row = (
+        db.query(Invoice)
+        .filter(Invoice.company_slug == company.slug)
+        .order_by(Invoice.id.desc())
+        .first()
+    )
     return row.chain_hash if row else ""
 
 
-def _build_invoice_entity(data: InvoiceIn) -> Invoice:
-    s = load_seller()
-    if not s["seller_name"]:
-        raise SellerNotConfiguredError("Firmendaten fehlen - bitte zuerst Einrichtung abschliessen.")
+def _build_invoice_entity(data: InvoiceIn, company: Company) -> Invoice:
+    if not company.is_configured():
+        raise SellerNotConfiguredError(
+            f"Firma '{company.display_name}' ist nicht vollstaendig eingerichtet."
+        )
 
     inv = Invoice(
+        company_slug=company.slug,
         invoice_number=data.invoice_number,
         issue_date=data.issue_date,
         delivery_date=data.delivery_date,
         due_date=data.due_date,
         currency=data.currency,
-        seller_name=s["seller_name"], seller_street=s["seller_street"],
-        seller_postcode=s["seller_postcode"], seller_city=s["seller_city"],
-        seller_country=s["seller_country"], seller_tax_id=s["seller_tax_id"],
-        seller_tax_number=s["seller_tax_number"], seller_email=s["seller_email"],
-        seller_iban=s["seller_iban"], seller_bic=s["seller_bic"], seller_bank=s["seller_bank"],
+        seller_name=company.seller_name, seller_street=company.seller_street,
+        seller_postcode=company.seller_postcode, seller_city=company.seller_city,
+        seller_country=company.seller_country, seller_tax_id=company.seller_tax_id,
+        seller_tax_number=company.seller_tax_number, seller_email=company.seller_email,
+        seller_iban=company.seller_iban, seller_bic=company.seller_bic,
+        seller_bank=company.seller_bank,
         buyer_name=data.buyer_name, buyer_street=data.buyer_street,
         buyer_postcode=data.buyer_postcode, buyer_city=data.buyer_city,
         buyer_country=data.buyer_country, buyer_tax_id=data.buyer_tax_id,
@@ -99,13 +103,20 @@ def _build_invoice_entity(data: InvoiceIn) -> Invoice:
     return inv
 
 
-def _finalize(db: Session, inv: Invoice, pdf_bytes: bytes) -> Invoice:
-    existing = db.query(Invoice).filter_by(invoice_number=inv.invoice_number).first()
+def _finalize(db: Session, inv: Invoice, company: Company, pdf_bytes: bytes) -> Invoice:
+    existing = (
+        db.query(Invoice)
+        .filter(Invoice.company_slug == company.slug,
+                Invoice.invoice_number == inv.invoice_number)
+        .first()
+    )
     if existing:
-        raise InvoiceNumberTakenError(f"Rechnungsnummer {inv.invoice_number} bereits vergeben.")
+        raise InvoiceNumberTakenError(
+            f"Rechnungsnummer {inv.invoice_number} bereits vergeben in '{company.display_name}'."
+        )
 
     ch = content_hash(_invoice_payload(inv))
-    prev = _last_chain_hash(db)
+    prev = _last_chain_hash_for(db, company)
     inv.content_hash = ch
     inv.prev_hash = prev
     inv.chain_hash = chain_hash(prev, ch)
@@ -114,9 +125,9 @@ def _finalize(db: Session, inv: Invoice, pdf_bytes: bytes) -> Invoice:
     db.add(inv)
     db.flush()
 
-    year_dir = Path(DATA_DIR) / "invoices" / str(inv.issue_date.year)
+    year_dir = company.dir / "invoices" / str(inv.issue_date.year)
     year_dir.mkdir(parents=True, exist_ok=True)
-    safe_number = inv.invoice_number.replace("/", "-").replace(" ", "_")
+    safe_number = inv.invoice_number.replace("/", "-").replace(" ", "_").replace("\\", "-")
     pdf_path = year_dir / f"{safe_number}.pdf"
     xml_path = year_dir / f"{safe_number}.xml"
 
@@ -124,41 +135,45 @@ def _finalize(db: Session, inv: Invoice, pdf_bytes: bytes) -> Invoice:
     embed_xml_in_pdf(pdf_bytes, xml_bytes, pdf_path)
     xml_path.write_bytes(xml_bytes)
 
+    from .config import DATA_DIR
     inv.pdf_path = str(pdf_path.relative_to(DATA_DIR))
     inv.xml_path = str(xml_path.relative_to(DATA_DIR))
 
     db.add(AuditLog(
         event="created", invoice_number=inv.invoice_number,
-        detail=f"pdf_sha256={file_sha256(str(pdf_path))} xml_sha256={file_sha256(str(xml_path))}",
+        detail=f"company={company.slug} pdf_sha256={file_sha256(str(pdf_path))} "
+               f"xml_sha256={file_sha256(str(xml_path))}",
     ))
     db.commit()
     db.refresh(inv)
+
+    company.bump_number_after(inv.invoice_number)
     return inv
 
 
-def create_invoice(db: Session, data: InvoiceIn) -> Invoice:
-    """Variante A: PDF komplett in der App erzeugen."""
-    inv = _build_invoice_entity(data)
-    pdf_bytes = render_invoice_pdf(inv)
-    return _finalize(db, inv, pdf_bytes)
+def create_invoice(db: Session, data: InvoiceIn, company: Company) -> Invoice:
+    inv = _build_invoice_entity(data, company)
+    pdf_bytes = render_invoice_pdf(inv, company)
+    return _finalize(db, inv, company, pdf_bytes)
 
 
-def create_invoice_from_pdf(db: Session, data: InvoiceIn, pdf_bytes: bytes) -> Invoice:
-    """Variante B: Bestehendes PDF uebernehmen und XML einbetten.
-
-    Wichtig: der Nutzer traegt die Rechnungsdaten trotzdem im Formular ein -
-    diese Daten landen im XML. Der Nutzer muss sicherstellen, dass das sichtbare
-    PDF dem XML entspricht (sonst ist die E-Rechnung ungueltig)."""
+def create_invoice_from_pdf(db: Session, data: InvoiceIn, company: Company, pdf_bytes: bytes) -> Invoice:
     if not pdf_bytes or pdf_bytes[:4] != b"%PDF":
         raise ValueError("Die hochgeladene Datei ist kein gueltiges PDF.")
-    inv = _build_invoice_entity(data)
-    return _finalize(db, inv, pdf_bytes)
+    inv = _build_invoice_entity(data, company)
+    return _finalize(db, inv, company, pdf_bytes)
 
 
-def verify_chain(db: Session) -> list[dict]:
-    issues = []
+def verify_chain(db: Session, company: Company) -> list[dict]:
+    issues: list[dict] = []
     prev = ""
-    for inv in db.query(Invoice).order_by(Invoice.id.asc()).all():
+    rows = (
+        db.query(Invoice)
+        .filter(Invoice.company_slug == company.slug)
+        .order_by(Invoice.id.asc())
+        .all()
+    )
+    for inv in rows:
         ch = content_hash(_invoice_payload(inv))
         expected_chain = chain_hash(prev, ch)
         if inv.content_hash != ch:

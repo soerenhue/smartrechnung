@@ -31,3 +31,4 @@ class InvoiceIn(BaseModel):
     items: list[InvoiceItemIn]
     notes: str = ""
     payment_terms: str = "Zahlbar innerhalb von 14 Tagen ohne Abzug."
+    reverse_charge: bool = False

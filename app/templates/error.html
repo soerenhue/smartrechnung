@@ -5,9 +5,14 @@
   <div style="font-size: 3rem">⚠️</div>
   <h1>{{ title }}</h1>
   <p class="muted" style="max-width: 540px; margin: 12px auto 24px">{{ message }}</p>
+  {% if issues %}
+  <ul style="text-align:left; max-width:540px; margin: 0 auto 24px; color:#b91c1c">
+    {% for i in issues %}<li>{{ i }}</li>{% endfor %}
+  </ul>
+  {% endif %}
   <p>
+    <a class="btn btn-secondary" href="javascript:history.back()">Zurück und korrigieren</a>
     <a class="btn" href="/">Zur Rechnungsliste</a>
-    <a class="btn btn-secondary" href="javascript:history.back()">Zurück</a>
   </p>
 </div>
 {% endblock %}

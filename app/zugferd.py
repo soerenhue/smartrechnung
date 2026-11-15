@@ -34,6 +34,20 @@ def build_xml(inv: Invoice) -> bytes:
     """Baut eine CII-XML (Cross Industry Invoice, UN/CEFACT) im ZUGFeRD-Profil
     EN 16931. factur-x akzeptiert dieses XML und bettet es als 'factur-x.xml' ein."""
 
+    # Steuer-Kategorie-Code nach EN 16931 / UNCL5305:
+    #   S = Standardsatz, Z = Nullsatz Innerstaatlich, E = steuerbefreit,
+    #   AE = Reverse-Charge, K = innergemeinschaftliche Lieferung, G = Export
+    tax_regime = getattr(inv, "tax_regime", "regular")
+    reverse_charge = getattr(inv, "reverse_charge", False)
+    if tax_regime == "small_business":
+        category_code = "E"  # steuerbefreit (§ 19 UStG)
+    elif tax_regime == "vat_exempt":
+        category_code = "E"
+    elif reverse_charge:
+        category_code = "AE"
+    else:
+        category_code = "S"
+
     items_xml = []
     tax_groups: dict[str, dict] = {}
     for i, it in enumerate(inv.items, start=1):
@@ -61,7 +75,7 @@ def build_xml(inv: Invoice) -> bytes:
     <ram:SpecifiedLineTradeSettlement>
       <ram:ApplicableTradeTax>
         <ram:TypeCode>VAT</ram:TypeCode>
-        <ram:CategoryCode>S</ram:CategoryCode>
+        <ram:CategoryCode>{category_code}</ram:CategoryCode>
         <ram:RateApplicablePercent>{_fmt(it.tax_rate)}</ram:RateApplicablePercent>
       </ram:ApplicableTradeTax>
       <ram:SpecifiedTradeSettlementLineMonetarySummation>
@@ -70,6 +84,16 @@ def build_xml(inv: Invoice) -> bytes:
     </ram:SpecifiedLineTradeSettlement>
   </ram:IncludedSupplyChainTradeLineItem>""")
 
+    # Pflichthinweis (ExemptionReason) bei nicht-regulaerer Besteuerung
+    exemption_reason = ""
+    if category_code == "E" and tax_regime == "small_business":
+        exemption_reason = ("<ram:ExemptionReasonCode>VATEX-EU-132</ram:ExemptionReasonCode>"
+                            "<ram:ExemptionReason>Kleinunternehmerregelung nach § 19 UStG</ram:ExemptionReason>")
+    elif category_code == "E":
+        exemption_reason = "<ram:ExemptionReason>Umsatzsteuerbefreit</ram:ExemptionReason>"
+    elif category_code == "AE":
+        exemption_reason = "<ram:ExemptionReason>Reverse Charge - Steuerschuld geht auf den Leistungsempfaenger ueber</ram:ExemptionReason>"
+
     tax_xml = []
     for rate_key, grp in sorted(tax_groups.items()):
         tax_xml.append(f"""
@@ -77,7 +101,8 @@ def build_xml(inv: Invoice) -> bytes:
         <ram:CalculatedAmount>{_fmt(grp['tax'])}</ram:CalculatedAmount>
         <ram:TypeCode>VAT</ram:TypeCode>
         <ram:BasisAmount>{_fmt(grp['basis'])}</ram:BasisAmount>
-        <ram:CategoryCode>S</ram:CategoryCode>
+        <ram:CategoryCode>{category_code}</ram:CategoryCode>
+        {exemption_reason}
         <ram:RateApplicablePercent>{_fmt(grp['rate'])}</ram:RateApplicablePercent>
       </ram:ApplicableTradeTax>""")
 

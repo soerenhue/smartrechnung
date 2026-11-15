@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Firmen{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Deine Firmen</h1>
+  <p class="muted">Du kannst beliebig viele Firmen anlegen. Jede Firma hat ihren
+     eigenen Rechnungsnummernkreis, eigene Vorlagen und eigene Rechnungen.
+     Oben in der Leiste wechselst du zwischen ihnen.</p>
+
+  <p><a class="btn" href="/firmen/neu">+ Neue Firma anlegen</a></p>
+
+  {% if companies %}
+  <table>
+    <thead><tr><th>Firma</th><th>USt-IdNr.</th><th>Nummernkreis</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for c in companies %}
+      <tr>
+        <td><strong>{{ c.display_name }}</strong><br><span class="muted">{{ c.seller_name }}</span></td>
+        <td>{{ c.seller_tax_id or c.seller_tax_number or '-' }}</td>
+        <td><code>{{ c.number_format }}</code><br>
+            <span class="muted">naechste: {{ c.format_next_number() }}</span></td>
+        <td>
+          {% if c.is_configured() %}<span class="ok">&#10003; bereit</span>
+          {% else %}<span class="warn">unvollstaendig</span>{% endif %}
+        </td>
+        <td>
+          <a href="/firmen/{{ c.slug }}">Bearbeiten</a>
+          <form method="post" action="/firmen/{{ c.slug }}/loeschen" style="display:inline"
+                onsubmit="return confirm('Firma wirklich loeschen? Rechnungsdaten dieser Firma bleiben erhalten.')">
+            <button class="btn btn-secondary" style="color:#dc2626" type="submit">Loeschen</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted">Du hast noch keine Firma angelegt.</p>
+  {% endif %}
+</div>
+{% endblock %}

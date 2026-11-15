@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -14,7 +14,8 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    invoice_number: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    company_slug: Mapped[str] = mapped_column(String(128), index=True, default="")
+    invoice_number: Mapped[str] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(16), default="issued")  # issued | cancelled
 
     # Rechnungsdaten
@@ -53,6 +54,8 @@ class Invoice(Base):
 
     notes: Mapped[str] = mapped_column(Text, default="")
     payment_terms: Mapped[str] = mapped_column(Text, default="Zahlbar innerhalb von 14 Tagen ohne Abzug.")
+    tax_regime: Mapped[str] = mapped_column(String(32), default="regular")  # regular | small_business | vat_exempt
+    reverse_charge: Mapped[bool] = mapped_column(default=False)
 
     # GoBD / Audit
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -66,6 +69,10 @@ class Invoice(Base):
 
     items: Mapped[list["InvoiceItem"]] = relationship(
         back_populates="invoice", cascade="all, delete-orphan", order_by="InvoiceItem.position"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("company_slug", "invoice_number", name="uq_company_number"),
     )
 
 
