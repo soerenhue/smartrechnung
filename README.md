@@ -1,132 +1,121 @@
-# E-Rechnung — Selbst gehostete ZUGFeRD-App
+# E-Rechnung — Doppelklick, loslegen
 
-Kleines, kostenloses Tool, mit dem du eine ganz normale Rechnung schreibst und
-automatisch eine **E-Rechnung** daraus bekommst: ein Hybrid-PDF, das visuell
-aussieht wie dein gewohntes Layout und zusätzlich das maschinenlesbare
-**ZUGFeRD / factur-x / EN-16931**-XML eingebettet enthält. Damit erfüllst du die
-ab 2027 geltende B2B-E-Rechnungspflicht in Deutschland.
+Kleine, kostenlose Desktop-App für Freiberufler und kleine Unternehmen: Du
+schreibst eine ganz normale Rechnung, die App erzeugt automatisch ein
+**ZUGFeRD-E-Rechnung-PDF** (gesetzlich gültig in Deutschland ab 2027).
+Alles läuft lokal auf deinem Rechner — es gibt keinen Server, keine Cloud,
+niemand sieht deine Daten.
 
-> **Für wen?** Freiberufler, kleine Unternehmen, Agenturen. Jeder betreibt seine
-> eigene Instanz auf dem eigenen Rechner oder Server — **niemand sieht die
-> Rechnungen eines anderen**.
+> **Für wen?** Freiberufler, Handwerker, kleine GmbHs — alle, die ab
+> Januar 2027 (bzw. 2028 für Kleinunternehmen) E-Rechnungen stellen müssen
+> und keine teure Buchhaltungssoftware kaufen wollen.
 
-## Was macht die App?
+## So einfach ist es
 
-- Rechnung über ein Web-Formular erfassen (Positionen, Steuer, Empfänger, …)
-- Automatisch PDF **und** ZUGFeRD-XML erzeugen, XML ins PDF einbetten
-- Rechnungsliste, Einzel-Downloads (PDF oder XML)
-- **Eigene Rechnungsvorlage pro Instanz** — Logo, Farben, Layout anpassbar
-- **GoBD-Konformität**: SHA-256-Hash-Chain über alle Rechnungen, Kettenprüfung,
-  Audit-Log, ZIP-Export mit Verfahrensdokumentation
-- Alles **lokal**: SQLite, Dateisystem, keine Cloud
+1. **Datei runterladen** für dein System
+   (Windows: `E-Rechnung-Windows.zip`, Mac: `E-Rechnung-macOS.zip`,
+   Linux: `E-Rechnung-Linux.tar.gz`).
+2. **Entpacken** und `E-Rechnung` doppelklicken. Es öffnet sich ein Fenster.
+3. **Firmendaten eintragen** (einmalig). Das sieht aus wie ein normales Formular.
+4. **Rechnung schreiben** — Empfänger, Positionen, Preise rein.
+5. Button „Rechnung erzeugen" → fertig. Du bekommst ein PDF, das gleichzeitig
+   eine E-Rechnung ist.
 
-## Schnellstart (5 Minuten, für dich oder deinen Onkel)
+Das war's. Kein Terminal, keine Installation von irgendwas anderem, keine
+Konfigurationsdateien.
 
-Voraussetzung: **Docker** (unter Windows/macOS: Docker Desktop).
+## Zwei Wege zum PDF — Umschalter im Formular
 
-```bash
-git clone <dein-fork> erechnung
-cd erechnung
-```
+- **Modus „In der App erzeugen"** *(Empfehlung)*: Du tippst die Daten ein,
+  die App baut ein hübsches PDF **und** hängt das XML dran. Ein Schritt.
+- **Modus „Eigenes PDF hochladen"**: Du hast deine eigene schöne Vorlage
+  (aus Word, InDesign, egal was) und willst nur das E-Rechnungs-XML
+  reingehängt haben. Dann tippst du daneben die gleichen Zahlen wie im PDF
+  und lädst dein PDF hoch. Die App bettet das XML ein.
 
-Firmendaten eintragen in `docker-compose.yml` (die Zeilen unter `environment:`):
-Name, Adresse, USt-IdNr., Steuernummer, IBAN, BIC.
+## Eigene Rechnungsvorlage — dein Design
 
-Dann:
-
-```bash
-docker compose up -d --build
-```
-
-Öffne `http://localhost:8080` im Browser. Fertig.
-
-## Für Freunde kopieren
-
-Jeder Freund:
-1. Klont das Repo.
-2. Trägt in `docker-compose.yml` **seine eigenen** Firmendaten ein.
-3. Startet mit `docker compose up -d`.
-4. Hat seine komplett getrennte Instanz unter `localhost:8080`, mit eigenem
-   `data/`-Ordner (dort landen seine Rechnungen, seine Datenbank, sein Branding).
-
-**Wichtig:** Daten liegen physisch bei jedem im `data/`-Ordner. Es gibt keinen
-gemeinsamen Server. Deine Rechnungen sind bei dir, seine bei ihm.
-
-## Eigene Rechnungsvorlage bauen
-
-Nach dem ersten Start liegen unter `data/templates/` zwei fertige Vorlagen:
+Nach dem ersten Start liegen in deinem Ordner `E-Rechnung/templates/` zwei
+fertige Vorlagen zum Umschalten:
 - `standard.html` — klassische Geschäftsrechnung mit farbigem Kopf
 - `minimal.html` — reduziertes Layout
 
-**Für den Onkel anpassen:**
-1. Kopie anlegen: `cp data/templates/standard.html data/templates/onkel.html`
-2. HTML/CSS nach Bedarf editieren (ganz normales HTML, CSS mit WeasyPrint-Support).
-3. In der App unter **Einstellungen** → „Aktive Vorlage" → `onkel.html` wählen.
-4. Logo hochladen, Farben setzen, Fußzeile setzen — fertig.
+Du kannst eigene daneben legen — das ist normales HTML/CSS, lässt sich mit
+jedem Texteditor bearbeiten. In den Einstellungen wählst du dann aus, welche
+Vorlage für deine Rechnungen genutzt wird. Logo, Farben und Fußzeilen stellst
+du auch dort ein — ohne eine Datei anfassen zu müssen.
 
-Verfügbare Variablen in der Vorlage: `inv` (Rechnung), `items` (Positionen),
-`branding` (Farben, Logo, Fußzeilen). Filter: `|money`, `|date`, `|qty`.
+## Wo liegen deine Daten?
 
-## E-Rechnungs-Compliance
+Alles liegt lokal auf deinem Rechner in einem Ordner namens `E-Rechnung`:
 
-- **Format:** ZUGFeRD 2.x / factur-x, Profil EN 16931 (Comfort). Erfüllt die
-  Anforderungen des deutschen Umsatzsteuergesetzes an eine E-Rechnung.
-- **Prüfung:** Du solltest jede Vorlage einmal gegen den offiziellen
-  [KoSIT-Validator](https://github.com/itplr-kosit/validator) prüfen, bevor du
-  produktiv schickst. (Optionale Integration — siehe TODO.)
-- **Versand:** E-Mail mit dem PDF im Anhang reicht rechtlich. Empfänger
-  extrahiert das XML automatisch aus dem PDF.
+- **Windows:** `C:\Users\<DeinName>\Documents\E-Rechnung`
+- **macOS:** `~/Documents/E-Rechnung`
+- **Linux:** `~/.local/share/E-Rechnung`
 
-## GoBD-Konformität
+Darin findest du:
+- `invoices/<Jahr>/<Nummer>.pdf` — deine erzeugten E-Rechnungen
+- `invoices/<Jahr>/<Nummer>.xml` — das XML zusätzlich einzeln (Backup)
+- `erechnung.db` — die kleine Datenbank
+- `templates/` — Rechnungsvorlagen zum Anpassen
+- `branding/` — dein Logo
+- `seller.json`, `branding.json` — deine Einstellungen
 
-Das System erfüllt die Kernanforderungen der GoBD an digitale Belege:
+**Dieser Ordner ist dein Backup-Ziel.** Sichere ihn regelmäßig auf einen
+USB-Stick oder in die Cloud deiner Wahl (10 Jahre Aufbewahrungspflicht).
 
-- **Unveränderbarkeit:** Jede Rechnung ist mit SHA-256 gehasht. Der Hash wird
-  mit dem Hash der vorherigen Rechnung verkettet. Nachträgliche Änderungen
-  brechen die Kette und werden auf der Übersichtsseite sofort angezeigt.
-- **Vollständigkeit:** PDF + XML landen in `data/invoices/<Jahr>/<Nummer>.*`.
-- **Nachvollziehbarkeit:** Audit-Log in der Datenbank, pro Ereignis eine Zeile.
-- **Verfahrensdokumentation:** Automatisch im `GoBD-Export` enthalten.
-- **10-Jahres-Aufbewahrung:** Du musst den `data/`-Ordner regelmäßig sichern.
-  Empfohlen: tägliches Backup auf WORM-Speicher oder in ein versioniertes Archiv.
+## GoBD-konform
 
-Für eine Betriebsprüfung: Unter `Einstellungen` → „GoBD-Export" bekommst du ein
-ZIP mit allen PDFs, XMLs, dem Hash-Protokoll und der Verfahrensdokumentation.
+Die App erfüllt die wichtigsten Punkte der deutschen GoBD-Vorschriften:
 
-## Datensicherung — unbedingt lesen
+- **Unveränderbar**: Jede Rechnung ist mit SHA-256-Hash gesichert. Hashes
+  werden verkettet. Wird nachträglich eine alte Rechnung manipuliert, bricht
+  die Kette — die App zeigt dir das sofort als Warnung an.
+- **Vollständig**: Jede Rechnung landet als PDF + XML im Ordner.
+- **Nachvollziehbar**: Audit-Log mit Zeitstempel in der Datenbank.
+- **Prüfer-tauglich**: Unter „GoBD-Export" bekommst du ein fertiges ZIP
+  mit allen Rechnungen, Hash-Protokoll und Verfahrensdokumentation.
 
-Das Programm archiviert *noch nicht automatisch* in ein WORM-Medium. Du musst
-selbst dafür sorgen, dass der `data/`-Ordner über **10 Jahre** erhalten bleibt.
-Vorschläge:
-- Tägliches Backup via `restic` oder `borg` auf einen externen Speicher.
-- Zusätzlich: monatlicher Jahres-Export (GoBD-ZIP) auf ein separates Medium.
+## Für Entwickler — selbst bauen
 
-## Konfiguration
+Falls du den Installer selbst bauen willst:
 
-| Variable (docker-compose.yml) | Zweck |
-|---|---|
-| `SELLER_*` | Deine Firmendaten. Werden auf jede Rechnung geschrieben. |
-| `REQUIRE_AUTH` | `true` setzt Basic-Auth vor die ganze App (falls du sie remote hostest). |
-| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Zugangsdaten für den Fall oben. |
+```bash
+# Linux-System-Libs (nur auf Linux-Build-Maschinen)
+sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+    libcairo2 libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info
 
-Die Rechnungsvorlagen und das Branding sind pro Instanz **in** `data/` —
-container-Rebuilds löschen sie nicht.
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-## Technische Basis
+# App direkt starten (zum Entwickeln)
+python launcher.py
 
-- Python 3.12, FastAPI, SQLAlchemy, SQLite
+# Installer bauen (Ergebnis in dist/)
+pyinstaller erechnung.spec --clean
+```
+
+Der Workflow in `.github/workflows/build.yml` baut bei einem Git-Tag `v*`
+automatisch Installer für Windows, macOS und Linux und hängt sie an das
+GitHub-Release.
+
+## Freunden geben
+
+1. Du taggst einmal `git tag v1.0.0 && git push --tags`.
+2. GitHub baut die drei Installer.
+3. Du schickst deinem Onkel den Link zu `E-Rechnung-Windows.zip`.
+4. Er entpackt, doppelklickt, trägt seine Firmendaten ein, schreibt Rechnungen.
+
+**Deine Rechnungen bleiben bei dir. Seine bleiben bei ihm.** Die Apps reden
+nie miteinander, kein Server dazwischen.
+
+## Lizenz & Basis
+
+Open Source, permissive Lizenzen. Verwendete Bibliotheken:
+- [FastAPI](https://fastapi.tiangolo.com/), [SQLAlchemy](https://sqlalchemy.org/), [Jinja2](https://palletsprojects.com/p/jinja/)
 - [WeasyPrint](https://weasyprint.org/) für PDF-Erzeugung
 - [factur-x](https://pypi.org/project/factur-x/) für ZUGFeRD-Einbettung
-- Jinja2 für Vorlagen
+- [pywebview](https://pywebview.flowrl.com/) für das Desktop-Fenster
+- [PyInstaller](https://pyinstaller.org/) für das Packaging
 
-Alles Open Source unter permissiven Lizenzen. Keine Lizenzkosten, keine
-Cloud-Abhängigkeit, keine Datenweitergabe an Dritte.
-
-## TODO / Nächste Schritte
-
-- [ ] KoSIT-Validator in die Pipeline integrieren (Java-JAR im Container).
-- [ ] Vorlagen-Vorschau direkt in der Einstellungsseite.
-- [ ] Rechnungs-Entwurf (Draft) vor dem Festschreiben.
-- [ ] Storno/Gutschrift-Workflow.
-- [ ] Automatischer Versand per SMTP an den Empfänger.
-- [ ] Jahres-Archiv als signiertes PDF/A-3-Paket.
+Keine Abo-Kosten, keine Cloud, keine Datenweitergabe.

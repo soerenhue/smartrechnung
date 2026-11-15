@@ -13,6 +13,20 @@
 
   <p><a class="btn" href="/neu">+ Neue Rechnung</a></p>
 
+  {% if not invoices %}
+  <div style="text-align:center; padding: 30px 20px; background:#eff6ff; border-radius:10px; margin-top:16px">
+    <div style="font-size: 2.6rem">📄</div>
+    <h2 style="margin:8px 0 4px 0">Willkommen!</h2>
+    <p class="muted" style="max-width:420px; margin: 0 auto 20px">
+      Du hast noch keine Rechnung erstellt. Mit einem Klick auf den Button
+      unten legst du deine erste Rechnung an. Du kommst immer wieder hier zurück.
+    </p>
+    <a class="btn" href="/neu" style="padding: 14px 28px; font-size: 1.05rem">
+      + Erste Rechnung schreiben
+    </a>
+  </div>
+  {% endif %}
+
   {% if invoices %}
   <table>
     <thead><tr>
@@ -36,8 +50,6 @@
     {% endfor %}
     </tbody>
   </table>
-  {% else %}
-    <p class="muted">Noch keine Rechnungen. Lege oben eine neue an.</p>
   {% endif %}
 </div>
 {% endblock %}

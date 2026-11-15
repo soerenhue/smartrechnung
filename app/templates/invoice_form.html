@@ -3,11 +3,32 @@
 {% block content %}
 <div class="card">
   <h1>Neue Rechnung</h1>
-  <p class="muted">Erzeugt automatisch das PDF mit eingebettetem ZUGFeRD-XML (E-Rechnung nach EN 16931).</p>
 
-  <form method="post" action="/neu" id="form">
+  <div class="tabs">
+    <button type="button" class="tab active" data-mode="generate">Rechnung in der App erzeugen</button>
+    <button type="button" class="tab" data-mode="upload">Eigenes PDF hochladen</button>
+  </div>
+
+  <p class="muted" id="modeHelpGenerate">
+    Du trägst die Daten ins Formular ein, die App baut PDF <strong>und</strong> ZUGFeRD-XML
+    automatisch zusammen. Einfachster und sicherster Weg.
+  </p>
+  <p class="muted" id="modeHelpUpload" style="display:none">
+    <strong>Wichtig:</strong> Die Zahlen und Adressen hier müssen <em>exakt</em> mit deinem
+    hochgeladenen PDF übereinstimmen, sonst ist die E-Rechnung ungültig.
+    Die App betten das XML nur in dein PDF ein.
+  </p>
+
+  <form method="post" action="/neu" id="form" enctype="multipart/form-data">
+    <input type="hidden" name="mode" id="mode" value="generate">
+
+    <div id="uploadBox" style="display:none; background:#fef3c7; padding:14px; border-radius:6px; margin-bottom:16px">
+      <label><strong>Dein fertiges PDF</strong></label>
+      <input type="file" name="pdf_file" accept="application/pdf">
+    </div>
+
     <div class="grid">
-      <div><label>Rechnungsnummer *</label><input name="invoice_number" required></div>
+      <div><label>Rechnungsnummer *</label><input name="invoice_number" value="{{ suggested_number }}" required></div>
       <div><label>Rechnungsdatum *</label><input type="date" name="issue_date" required></div>
       <div><label>Leistungsdatum *</label><input type="date" name="delivery_date" required></div>
       <div><label>Faellig am *</label><input type="date" name="due_date" required></div>
@@ -32,22 +53,15 @@
         <div><label>Menge</label><input name="qty_1" value="1" type="number" step="0.001"></div>
         <div><label>Einheit</label>
           <select name="unit_1">
-            <option value="C62">Stueck</option>
-            <option value="HUR">Stunde</option>
-            <option value="DAY">Tag</option>
-            <option value="MTR">Meter</option>
-            <option value="KGM">kg</option>
-            <option value="LTR">Liter</option>
+            <option value="C62">Stueck</option><option value="HUR">Stunde</option>
+            <option value="DAY">Tag</option><option value="MTR">Meter</option>
+            <option value="KGM">kg</option><option value="LTR">Liter</option>
             <option value="XPP">Pauschal</option>
           </select>
         </div>
         <div><label>Einzelpreis (netto)</label><input name="price_1" value="0" type="number" step="0.0001"></div>
         <div><label>USt-%</label>
-          <select name="tax_1">
-            <option value="19">19 %</option>
-            <option value="7">7 %</option>
-            <option value="0">0 %</option>
-          </select>
+          <select name="tax_1"><option value="19">19 %</option><option value="7">7 %</option><option value="0">0 %</option></select>
         </div>
         <div><button type="button" class="btn btn-secondary" onclick="removeRow(this)">&minus;</button></div>
       </div>
@@ -63,6 +77,13 @@
     <p style="margin-top:20px"><button class="btn" type="submit">Rechnung erzeugen</button></p>
   </form>
 </div>
+
+<style>
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; }
+  .tab { padding: 10px 18px; background: none; border: 0; cursor: pointer; font: inherit;
+         color: #6b7280; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+</style>
 
 <script>
 let n = 1;
@@ -92,11 +113,20 @@ function removeRow(btn) {
   const row = btn.closest("[data-row]");
   if (document.querySelectorAll("#items [data-row]").length > 1) row.remove();
 }
-// Heutedatum als Default
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  const mode = t.dataset.mode;
+  document.getElementById("mode").value = mode;
+  const isUpload = (mode === "upload");
+  document.getElementById("uploadBox").style.display = isUpload ? "block" : "none";
+  document.getElementById("modeHelpGenerate").style.display = isUpload ? "none" : "block";
+  document.getElementById("modeHelpUpload").style.display = isUpload ? "block" : "none";
+  document.querySelector("input[name=pdf_file]").required = isUpload;
+}));
 const today = new Date().toISOString().slice(0,10);
 document.querySelector('[name=issue_date]').value = today;
 document.querySelector('[name=delivery_date]').value = today;
-const due = new Date(Date.now()+14*86400000).toISOString().slice(0,10);
-document.querySelector('[name=due_date]').value = due;
+document.querySelector('[name=due_date]').value = new Date(Date.now()+14*86400000).toISOString().slice(0,10);
 </script>
 {% endblock %}

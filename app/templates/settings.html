@@ -3,55 +3,57 @@
 {% block content %}
 <div class="card">
   <h1>Einstellungen</h1>
-  <p class="muted">Diese Einstellungen gelten nur fuer diese Installation. Sie werden in
-     <code>data/branding.json</code> gespeichert.</p>
+  <p class="muted">Alle Einstellungen werden lokal gespeichert in: <code>{{ data_dir }}</code></p>
 
   <form method="post" action="/einstellungen" enctype="multipart/form-data">
-    <h3>Rechnungsvorlage</h3>
-    <p class="muted">Die Vorlagen liegen in <code>data/templates/</code>. Du kannst sie frei bearbeiten
-       oder eine eigene daneben legen (z. B. <code>onkel.html</code>) und hier auswaehlen.</p>
+
+    <h3>Firmendaten</h3>
+    <div class="grid">
+      <div><label>Firma / Name</label><input name="seller_name" value="{{ seller.seller_name }}"></div>
+      <div><label>E-Mail</label><input name="seller_email" value="{{ seller.seller_email }}"></div>
+      <div><label>Strasse + Nr</label><input name="seller_street" value="{{ seller.seller_street }}"></div>
+      <div><label>Land</label><input name="seller_country" value="{{ seller.seller_country }}" maxlength="2"></div>
+      <div><label>PLZ</label><input name="seller_postcode" value="{{ seller.seller_postcode }}"></div>
+      <div><label>Ort</label><input name="seller_city" value="{{ seller.seller_city }}"></div>
+      <div><label>USt-IdNr.</label><input name="seller_tax_id" value="{{ seller.seller_tax_id }}"></div>
+      <div><label>Steuernummer</label><input name="seller_tax_number" value="{{ seller.seller_tax_number }}"></div>
+      <div><label>IBAN</label><input name="seller_iban" value="{{ seller.seller_iban }}"></div>
+      <div><label>BIC</label><input name="seller_bic" value="{{ seller.seller_bic }}"></div>
+      <div><label>Bank</label><input name="seller_bank" value="{{ seller.seller_bank }}"></div>
+    </div>
+
+    <h3 style="margin-top:28px">Rechnungs-Design</h3>
     <div><label>Aktive Vorlage</label>
       <select name="template">
         {% for t in templates %}
           <option value="{{ t }}" {% if t == branding.template %}selected{% endif %}>{{ t }}</option>
         {% endfor %}
-      </select></div>
-
-    <h3>Farben & Schrift</h3>
+      </select>
+      <p class="muted">Vorlagen liegen in <code>{{ data_dir }}/templates/</code>. Du kannst sie frei editieren oder kopieren.</p>
+    </div>
     <div class="grid">
       <div><label>Primaerfarbe</label><input name="primary_color" type="color" value="{{ branding.primary_color }}"></div>
       <div><label>Akzentfarbe</label><input name="accent_color" type="color" value="{{ branding.accent_color }}"></div>
       <div><label>Textfarbe</label><input name="text_color" type="color" value="{{ branding.text_color }}"></div>
-      <div><label>Dezente Farbe (Linien, Hinweise)</label><input name="muted_color" type="color" value="{{ branding.muted_color }}"></div>
+      <div><label>Dezente Farbe</label><input name="muted_color" type="color" value="{{ branding.muted_color }}"></div>
       <div style="grid-column:1/-1"><label>Schriftfamilie (CSS)</label>
         <input name="font_family" value="{{ branding.font_family }}"></div>
     </div>
 
-    <h3>Logo</h3>
-    <div class="grid">
-      <div><label>Aktuelles Logo</label>
-        {% if branding.logo_filename %}
-          <img src="/branding/{{ branding.logo_filename }}" style="max-height:60px;background:#fff;padding:4px;border:1px solid #ddd">
-          <p class="muted">{{ branding.logo_filename }}</p>
-        {% else %}
-          <p class="muted">Kein Logo hinterlegt.</p>
-        {% endif %}
-      </div>
-      <div><label>Neues Logo hochladen (PNG/JPG/SVG)</label>
-        <input type="file" name="logo" accept="image/*"></div>
-    </div>
+    <h3 style="margin-top:28px">Logo</h3>
+    {% if branding.logo_filename %}
+      <img src="/branding/{{ branding.logo_filename }}" style="max-height:60px;background:#fff;padding:4px;border:1px solid #ddd">
+      <p class="muted">{{ branding.logo_filename }}</p>
+    {% endif %}
+    <label>Neues Logo hochladen (PNG/JPG/SVG)</label>
+    <input type="file" name="logo" accept="image/*">
 
-    <h3>Fusszeilen (3 Zeilen fuer Impressum/Bank)</h3>
+    <h3 style="margin-top:28px">Fusszeilen</h3>
     <div><label>Zeile 1</label><input name="footer_line_1" value="{{ branding.footer_line_1 }}"></div>
     <div><label>Zeile 2</label><input name="footer_line_2" value="{{ branding.footer_line_2 }}"></div>
     <div><label>Zeile 3</label><input name="footer_line_3" value="{{ branding.footer_line_3 }}"></div>
 
-    <h3>Firmendaten (nicht hier - kommen aus der Container-Konfiguration)</h3>
-    <p class="muted">Die Firmendaten (Name, Adresse, USt-IdNr., IBAN, ...) stehen in der
-       <code>docker-compose.yml</code> unter <code>environment</code> und gelten pro Installation.
-       Aktuell: <strong>{{ seller.seller_name }}</strong>, USt-IdNr <code>{{ seller.seller_tax_id }}</code>, IBAN <code>{{ seller.seller_iban }}</code>.</p>
-
-    <p style="margin-top:20px"><button class="btn" type="submit">Speichern</button></p>
+    <p style="margin-top:20px"><button class="btn" type="submit">Alles speichern</button></p>
   </form>
 </div>
 {% endblock %}
