@@ -44,6 +44,8 @@ with engine.begin() as conn:
         conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN tax_regime VARCHAR(32) DEFAULT 'regular'")
     if "reverse_charge" not in cols:
         conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN reverse_charge BOOLEAN DEFAULT 0")
+    if "qr_code_filename" not in cols:
+        conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN qr_code_filename VARCHAR(256) DEFAULT ''")
 
 
 app = FastAPI(title="E-Rechnung", docs_url=None, redoc_url=None, openapi_url=None)
@@ -206,6 +208,7 @@ async def company_edit_save(slug: str, request: Request):
         "next_number": form.get("next_number") or 1,
         "tax_regime": form.get("tax_regime") or "regular",
         "reverse_charge_default": bool(form.get("reverse_charge_default")),
+        "qr_code_enabled": bool(form.get("qr_code_enabled")),
     })
 
     # Branding speichern

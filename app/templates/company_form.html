@@ -69,6 +69,21 @@
       <div><label>Bank</label>
         <input name="seller_bank" value="{{ company.seller_bank if company else '' }}"></div>
     </div>
+
+    <div style="margin-top:14px;background:#f0f9ff;padding:10px 14px;border-radius:6px;border-left:3px solid #3b82f6">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+        <input type="checkbox" name="qr_code_enabled" value="1"
+               {% if (company and company.qr_code_enabled) or not company %}checked{% endif %}
+               style="width:auto;margin:0">
+        <span><strong>QR-Code zum Bezahlen auf jede Rechnung drucken</strong></span>
+      </label>
+      <p class="muted" style="margin:6px 0 0 24px">
+        Dein Kunde oeffnet seine Banking-App (Sparkasse, Volksbank, N26, ING, etc.),
+        scannt den Code mit der Kamera - und alle Felder (Empfaenger, IBAN, Betrag,
+        Verwendungszweck) sind automatisch ausgefuellt. Er muss nur noch bestaetigen.
+        Nach EPC-Standard (Giro-Code), funktioniert mit allen deutschen Banken.
+      </p>
+    </div>
   </div>
 
   <div class="card">

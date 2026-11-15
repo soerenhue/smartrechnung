@@ -152,13 +152,21 @@ _TEMPLATE_HEAD = r"""<!doctype html>
 <div class="notes"><strong>Hinweise:</strong><br>{{ inv.notes|replace('\n', '<br>')|safe }}</div>
 {% endif %}
 
-<div class="payment">
-  <strong>Zahlungsbedingungen:</strong> {{ inv.payment_terms }}<br>
-  <strong>Bankverbindung:</strong>
-  {% if inv.seller_bank %}{{ inv.seller_bank }} &middot; {% endif %}
-  IBAN {{ inv.seller_iban }}
-  {% if inv.seller_bic %}&middot; BIC {{ inv.seller_bic }}{% endif %}<br>
-  <strong>Verwendungszweck:</strong> {{ inv.invoice_number }}
+<div class="payment" style="display:flex;gap:14px;align-items:center">
+  <div style="flex:1">
+    <strong>Zahlungsbedingungen:</strong> {{ inv.payment_terms }}<br>
+    <strong>Bankverbindung:</strong>
+    {% if inv.seller_bank %}{{ inv.seller_bank }} &middot; {% endif %}
+    IBAN {{ inv.seller_iban }}
+    {% if inv.seller_bic %}&middot; BIC {{ inv.seller_bic }}{% endif %}<br>
+    <strong>Verwendungszweck:</strong> {{ inv.invoice_number }}
+  </div>
+  {% if inv.qr_code_filename %}
+  <div style="text-align:center">
+    <img src="{{ inv.qr_code_filename }}" style="width:28mm;height:28mm">
+    <div style="font-size:7pt;color:%MUTED_COLOR%;margin-top:1mm">Mit Banking-App scannen</div>
+  </div>
+  {% endif %}
 </div>
 
 </body>

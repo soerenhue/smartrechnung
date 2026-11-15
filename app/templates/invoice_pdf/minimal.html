@@ -72,12 +72,20 @@
   </table>
 </div>
 
-<div class="footer">
-  Zahlbar bis {{ inv.due_date|date }} auf IBAN {{ inv.seller_iban }}
-  {% if inv.seller_bic %}(BIC {{ inv.seller_bic }}){% endif %}.
-  Verwendungszweck: {{ inv.invoice_number }}.
-  {% if branding.footer_line_1 %}<br>{{ branding.footer_line_1 }}{% endif %}
-  {% if branding.footer_line_2 %} · {{ branding.footer_line_2 }}{% endif %}
+<div style="display:flex;align-items:flex-start;gap:10mm;margin-top:10mm">
+  <div class="footer" style="flex:1;margin-top:0;border-top:0;padding-top:0">
+    Zahlbar bis {{ inv.due_date|date }} auf IBAN {{ inv.seller_iban }}
+    {% if inv.seller_bic %}(BIC {{ inv.seller_bic }}){% endif %}.
+    Verwendungszweck: {{ inv.invoice_number }}.
+    {% if branding.footer_line_1 %}<br>{{ branding.footer_line_1 }}{% endif %}
+    {% if branding.footer_line_2 %} · {{ branding.footer_line_2 }}{% endif %}
+  </div>
+  {% if inv.qr_code_filename %}
+  <div style="text-align:center">
+    <img src="{{ inv.qr_code_filename }}" style="width:24mm;height:24mm">
+    <div style="font-size:6.5pt;color:{{ branding.muted_color }};margin-top:0.5mm">Scannen &amp; bezahlen</div>
+  </div>
+  {% endif %}
 </div>
 
 </body>

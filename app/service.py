@@ -16,6 +16,7 @@ from .config import Company
 from .hashing import chain_hash, content_hash, file_sha256
 from .models import AuditLog, Invoice, InvoiceItem
 from .pdf import render_invoice_pdf
+from .qrcode_gen import generate_payment_qr
 from .schemas import InvoiceIn
 from .zugferd import build_xml, embed_xml_in_pdf
 
@@ -151,8 +152,19 @@ def _finalize(db: Session, inv: Invoice, company: Company, pdf_bytes: bytes) -> 
     return inv
 
 
+def _maybe_make_qr(inv: Invoice, company: Company) -> None:
+    """QR-Code zum Bezahlen erzeugen, wenn Firma das aktiviert hat.
+    Wird VOR dem PDF-Render aufgerufen, damit das Template den QR einbetten kann."""
+    if not getattr(company, "qr_code_enabled", True):
+        return
+    filename = generate_payment_qr(inv, company.assets_dir)
+    if filename:
+        inv.qr_code_filename = filename
+
+
 def create_invoice(db: Session, data: InvoiceIn, company: Company) -> Invoice:
     inv = _build_invoice_entity(data, company)
+    _maybe_make_qr(inv, company)
     pdf_bytes = render_invoice_pdf(inv, company)
     return _finalize(db, inv, company, pdf_bytes)
 
@@ -161,6 +173,7 @@ def create_invoice_from_pdf(db: Session, data: InvoiceIn, company: Company, pdf_
     if not pdf_bytes or pdf_bytes[:4] != b"%PDF":
         raise ValueError("Die hochgeladene Datei ist kein gueltiges PDF.")
     inv = _build_invoice_entity(data, company)
+    _maybe_make_qr(inv, company)
     return _finalize(db, inv, company, pdf_bytes)
 
 

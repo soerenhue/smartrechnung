@@ -66,6 +66,8 @@ class Invoice(Base):
     # Dateipfade (relativ zu data_dir)
     pdf_path: Mapped[str] = mapped_column(String(512), default="")
     xml_path: Mapped[str] = mapped_column(String(512), default="")
+    # EPC-QR-Code (Giro-Code) als PNG - optional, nur wenn Firma aktiviert hat
+    qr_code_filename: Mapped[str] = mapped_column(String(256), default="")
 
     items: Mapped[list["InvoiceItem"]] = relationship(
         back_populates="invoice", cascade="all, delete-orphan", order_by="InvoiceItem.position"

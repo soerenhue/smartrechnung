@@ -63,6 +63,9 @@ DEFAULT_SELLER = {
     # Umsatzsteuer-Regime (bestimmt Pflichthinweise auf der Rechnung)
     "tax_regime": "regular",   # regular | small_business | vat_exempt
     "reverse_charge_default": False,
+    # EPC-QR-Code ("Giro-Code") auf jede Rechnung drucken.
+    # Banking-Apps scannen ihn und fuellen die Ueberweisung automatisch aus.
+    "qr_code_enabled": True,
 }
 
 
