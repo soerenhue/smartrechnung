@@ -35,6 +35,18 @@
     </div>
 
     <h3>Rechnungsempfaenger</h3>
+    {% if customers %}
+    <div style="background:#eff6ff;padding:12px 14px;border-radius:6px;margin-bottom:14px;border-left:3px solid #3b82f6">
+      <label><strong>Vorhandenen Kunden auswaehlen</strong> (oder unten neu eintippen)</label>
+      <select id="customer_select" onchange="loadCustomer(this.value)" style="margin-top:6px">
+        <option value="">-- Neuer Kunde (Felder unten ausfuellen) --</option>
+        {% for cust in customers %}
+          <option value="{{ cust.id }}">{{ cust.display_name }} ({{ cust.postcode }} {{ cust.city }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
     <div class="grid">
       <div><label>Firma / Name *</label><input name="buyer_name" required></div>
       <div><label>Strasse + Nr *</label><input name="buyer_street" required></div>
@@ -44,6 +56,12 @@
       <div><label>USt-IdNr. (optional)</label><input name="buyer_tax_id"></div>
       <div><label>E-Mail (optional)</label><input name="buyer_email" type="email"></div>
       <div><label>Leitweg-ID / Referenz (B2G)</label><input name="buyer_reference"></div>
+    </div>
+    <div style="margin-top:8px">
+      <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0">
+        <input type="checkbox" name="save_customer" value="1" checked style="width:auto;margin:0">
+        <span class="muted">Kunden fuer spaeter speichern (fuer naechste Rechnung an denselben)</span>
+      </label>
     </div>
 
     <h3>Positionen</h3>
@@ -145,5 +163,23 @@ const today = new Date().toISOString().slice(0,10);
 document.querySelector('[name=issue_date]').value = today;
 document.querySelector('[name=delivery_date]').value = today;
 document.querySelector('[name=due_date]').value = new Date(Date.now()+14*86400000).toISOString().slice(0,10);
+
+// Kundendaten aus Dropdown ins Formular laden
+async function loadCustomer(id) {
+  if (!id) return;
+  try {
+    const resp = await fetch("/kunden/" + id + ".json");
+    if (!resp.ok) return;
+    const d = await resp.json();
+    document.querySelector('[name=buyer_name]').value = d.name || '';
+    document.querySelector('[name=buyer_street]').value = d.street || '';
+    document.querySelector('[name=buyer_postcode]').value = d.postcode || '';
+    document.querySelector('[name=buyer_city]').value = d.city || '';
+    document.querySelector('[name=buyer_country]').value = d.country || 'DE';
+    document.querySelector('[name=buyer_tax_id]').value = d.tax_id || '';
+    document.querySelector('[name=buyer_email]').value = d.email || '';
+    document.querySelector('[name=buyer_reference]').value = d.reference || '';
+  } catch(e) {}
+}
 </script>
 {% endblock %}

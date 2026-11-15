@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -103,6 +104,31 @@ class InvoiceItem(Base):
     @property
     def gross_amount(self) -> Decimal:
         return (self.net_amount + self.tax_amount).quantize(Decimal("0.01"))
+
+
+class Customer(Base):
+    """Gespeicherte Rechnungsempfaenger pro Firma. Beim Rechnung-Anlegen
+    kann der Nutzer einen bestehenden Kunden auswaehlen statt alles neu
+    einzutippen."""
+
+    __tablename__ = "customers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_slug: Mapped[str] = mapped_column(String(128), index=True, default="")
+    display_name: Mapped[str] = mapped_column(String(255))  # nur fuer Anzeige im Dropdown
+
+    name: Mapped[str] = mapped_column(String(255))
+    street: Mapped[str] = mapped_column(String(255))
+    postcode: Mapped[str] = mapped_column(String(16))
+    city: Mapped[str] = mapped_column(String(128))
+    country: Mapped[str] = mapped_column(String(2), default="DE")
+    tax_id: Mapped[str] = mapped_column(String(32), default="")
+    email: Mapped[str] = mapped_column(String(255), default="")
+    reference: Mapped[str] = mapped_column(String(64), default="")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    use_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class AuditLog(Base):

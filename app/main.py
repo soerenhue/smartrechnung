@@ -10,7 +10,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -25,7 +25,7 @@ from .config import (
 from .pdf_analyzer import analyze_pdf, save_logo
 from .template_generator import generate_template
 from .db import Base, engine, get_db
-from .models import Invoice
+from .models import Customer, Invoice
 from .schemas import InvoiceIn, InvoiceItemIn
 from .service import (
     InvoiceNumberTakenError, SellerNotConfiguredError,
@@ -46,6 +46,9 @@ with engine.begin() as conn:
         conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN reverse_charge BOOLEAN DEFAULT 0")
     if "qr_code_filename" not in cols:
         conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN qr_code_filename VARCHAR(256) DEFAULT ''")
+
+    # Kunden-Tabelle wird durch Base.metadata.create_all automatisch angelegt,
+    # falls sie noch nicht existiert (Upgrade-Pfad fuer bestehende DBs).
 
 
 app = FastAPI(title="E-Rechnung", docs_url=None, redoc_url=None, openapi_url=None)
@@ -314,9 +317,17 @@ def new_invoice_form(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/firmen/neu?first=1", status_code=303)
     if not c.is_configured():
         return RedirectResponse(f"/firmen/{c.slug}", status_code=303)
+    # Gespeicherte Kunden fuer das Dropdown, sortiert nach letzter Nutzung
+    customers = (
+        db.query(Customer)
+        .filter(Customer.company_slug == c.slug)
+        .order_by(Customer.use_count.desc(), Customer.last_used_at.desc().nullslast())
+        .all()
+    )
     return _render(
         request, "invoice_form.html",
-        {"suggested_number": _suggest_next_number(db, c)},
+        {"suggested_number": _suggest_next_number(db, c),
+         "customers": customers},
     )
 
 
@@ -417,6 +428,46 @@ async def new_invoice_submit(request: Request, db: Session = Depends(get_db)):
 
 
 # --- Details, Downloads --------------------------------------------------
+@app.get("/kunden")
+def customers_list(request: Request, db: Session = Depends(get_db)):
+    c = active_company(request)
+    if not c:
+        return RedirectResponse("/", status_code=303)
+    rows = (
+        db.query(Customer)
+        .filter(Customer.company_slug == c.slug)
+        .order_by(Customer.display_name.asc())
+        .all()
+    )
+    return _render(request, "customers.html", {"customers_list": rows})
+
+
+@app.post("/kunden/{cust_id}/loeschen")
+def customer_delete(cust_id: int, request: Request, db: Session = Depends(get_db)):
+    c = active_company(request)
+    cust = db.get(Customer, cust_id)
+    if cust and c and cust.company_slug == c.slug:
+        db.delete(cust)
+        db.commit()
+    return RedirectResponse("/kunden", status_code=303)
+
+
+@app.get("/kunden/{cust_id}.json")
+def customer_json(cust_id: int, request: Request, db: Session = Depends(get_db)):
+    """Wird vom Rechnungsformular aufgerufen, wenn ein Kunde im Dropdown
+    ausgewaehlt wird - fuellt die Felder per JavaScript."""
+    c = active_company(request)
+    cust = db.get(Customer, cust_id)
+    if not cust or not c or cust.company_slug != c.slug:
+        raise HTTPException(404)
+    return {
+        "name": cust.name, "street": cust.street,
+        "postcode": cust.postcode, "city": cust.city,
+        "country": cust.country, "tax_id": cust.tax_id,
+        "email": cust.email, "reference": cust.reference,
+    }
+
+
 @app.get("/rechnung/{inv_id}")
 def invoice_detail(inv_id: int, request: Request, db: Session = Depends(get_db)):
     inv = db.get(Invoice, inv_id)

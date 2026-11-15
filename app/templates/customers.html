@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Kunden{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Kunden</h1>
+  <p class="muted">Diese Kunden werden automatisch gespeichert, wenn du eine
+     Rechnung an sie schreibst. Beim naechsten Mal waehlst du sie im
+     Rechnungsformular aus dem Dropdown - alle Felder sind dann schon
+     ausgefuellt.</p>
+
+  {% if customers_list %}
+  <table>
+    <thead><tr>
+      <th>Name</th><th>Anschrift</th><th>USt-IdNr.</th>
+      <th class="right">Benutzt</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for c in customers_list %}
+      <tr>
+        <td><strong>{{ c.display_name }}</strong>
+          {% if c.email %}<br><span class="muted">{{ c.email }}</span>{% endif %}
+        </td>
+        <td>{{ c.street }}<br><span class="muted">{{ c.postcode }} {{ c.city }}
+          {% if c.country and c.country != 'DE' %}, {{ c.country }}{% endif %}
+        </span></td>
+        <td>{{ c.tax_id or '-' }}</td>
+        <td class="right">{{ c.use_count }}x</td>
+        <td>
+          <form method="post" action="/kunden/{{ c.id }}/loeschen" style="display:inline"
+                onsubmit="return confirm('Kunden loeschen? Rechnungen an diesen Kunden bleiben erhalten.')">
+            <button class="btn btn-secondary" style="color:#dc2626" type="submit">Loeschen</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="margin-top:20px">
+    Noch keine Kunden gespeichert. Beim Erstellen der ersten Rechnung werden
+    sie automatisch hier angelegt.
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

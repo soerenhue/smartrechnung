@@ -47,16 +47,28 @@ def _bootstrap_macos_libs() -> None:
             f"{frameworks}:{current}" if current else str(frameworks)
         )
 
-        # Kritisch: libgobject MUSS vor dem WeasyPrint-Import mit RTLD_GLOBAL
-        # geladen werden. Grund: cffi.dlopen() nutzt RTLD_LOCAL. Wenn libpango
-        # intern libgobject sucht, findet dyld sie NICHT im globalen Namespace
-        # und laedt sie neu - das ergibt zwei GType-Instanzen und beim Pango-
-        # Init crasht die Double-Registration von PangoFontMap.
-        #
-        # Loesung: libgobject (+ dependencies libglib, libgio) global laden.
-        # Pango, Cairo et al. nutzen dann automatisch diese Instanzen.
-        # NUR die versionierten Dateien laden, nicht die Symlinks - wichtig
-        # fuer Dedup!
+        # KERN-FIX: cffi.FFI.dlopen() muss mit RTLD_GLOBAL arbeiten.
+        # Standardmaessig nutzt cffi RTLD_LOCAL - jede Lib bekommt einen
+        # separaten Symbol-Namespace. Resultat: libpango laedt intern
+        # libgobject neu, auch wenn libgobject schon im Prozess ist.
+        # Das erzeugt zwei GType-Instanzen -> 'cannot register existing
+        # type PangoFontMap' -> nativer Crash.
+        import cffi
+        import cffi.api
+        _orig_dlopen = cffi.api.FFI.dlopen
+        _RTLD_GLOBAL = 0x8
+        _RTLD_LAZY = 0x1
+
+        def _global_dlopen(self, name, flags=None):
+            # Explizit RTLD_GLOBAL|RTLD_LAZY, auch wenn flags uebergeben wurden
+            new_flags = (flags or 0) | _RTLD_GLOBAL | _RTLD_LAZY
+            return _orig_dlopen(self, name, flags=new_flags)
+
+        cffi.api.FFI.dlopen = _global_dlopen
+        cffi.FFI.dlopen = _global_dlopen
+
+        # Zusaetzlich libglib/libgobject etc. vorab global laden, damit
+        # dyld sie ueberhaupt findet (DYLD_FALLBACK reicht nicht immer)
         import glob as _glob
         for pattern in ["libglib-2.0.0.dylib", "libgobject-2.0.0.dylib",
                         "libgio-2.0.0.dylib", "libgmodule-2.0.0.dylib",
