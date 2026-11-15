@@ -46,12 +46,27 @@ def _bootstrap_macos_libs() -> None:
         os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
             f"{frameworks}:{current}" if current else str(frameworks)
         )
-        # WICHTIG: KEINE ctypes.CDLL-Preloads! Hat zuvor zu GObject-
-        # Double-Registration gefuehrt ("cannot register existing type
-        # PangoFontMap"), weil libgobject-2.0.dylib UND libgobject-2.0.0.dylib
-        # beide als separate ctypes-Instanzen geladen wurden und GType
-        # zweimal registriert wurde. cffi findet die Libs ohnehin ueber
-        # DYLD_FALLBACK_LIBRARY_PATH - und laedt jede nur einmal.
+
+        # Kritisch: libgobject MUSS vor dem WeasyPrint-Import mit RTLD_GLOBAL
+        # geladen werden. Grund: cffi.dlopen() nutzt RTLD_LOCAL. Wenn libpango
+        # intern libgobject sucht, findet dyld sie NICHT im globalen Namespace
+        # und laedt sie neu - das ergibt zwei GType-Instanzen und beim Pango-
+        # Init crasht die Double-Registration von PangoFontMap.
+        #
+        # Loesung: libgobject (+ dependencies libglib, libgio) global laden.
+        # Pango, Cairo et al. nutzen dann automatisch diese Instanzen.
+        # NUR die versionierten Dateien laden, nicht die Symlinks - wichtig
+        # fuer Dedup!
+        import glob as _glob
+        for pattern in ["libglib-2.0.0.dylib", "libgobject-2.0.0.dylib",
+                        "libgio-2.0.0.dylib", "libgmodule-2.0.0.dylib",
+                        "libffi.*.dylib", "libintl.*.dylib",
+                        "libpcre2-8.0.dylib"]:
+            for path in _glob.glob(str(frameworks / pattern)):
+                try:
+                    ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
+                except OSError:
+                    pass
 
     # Fontconfig: wir schreiben beim Start eine fonts.conf MIT ABSOLUTEN PFADEN
     # ins User-Verzeichnis. Grund: Fontconfig mag keine relativen Pfade in
