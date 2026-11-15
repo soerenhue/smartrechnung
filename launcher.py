@@ -76,21 +76,23 @@ def _bootstrap_macos_libs() -> None:
   </prefer></alias>
 
   <!-- CATCH-ALL: Jeder Font-Lookup (egal welcher Name!) bekommt am Ende
-       automatisch DejaVu als Fallback drangehaengt. So crasht Pango NIE,
-       auch bei Vorlagen, die eine nicht-installierte Font referenzieren. -->
+       eine stilistisch passende Kette angehaengt, damit Pango IMMER
+       eine Font findet - und eine die stilistisch passt.
+
+       Die Reihenfolge ist absichtlich: zuerst Serif-Fallbacks, dann
+       Sans-Fallbacks, dann Mono-Fallbacks. Fontconfig waehlt davon
+       die erste tatsaechlich vorhandene. -->
   <match target="pattern">
     <edit name="family" mode="append_last" binding="weak">
-      <string>DejaVu Sans</string>
-    </edit>
-  </match>
-  <match target="pattern">
-    <edit name="family" mode="append_last" binding="weak">
+      <string>Georgia</string>
+      <string>Times New Roman</string>
+      <string>DejaVu Serif</string>
+      <string>Helvetica Neue</string>
       <string>Helvetica</string>
-    </edit>
-  </match>
-  <match target="pattern">
-    <edit name="family" mode="append_last" binding="weak">
       <string>Arial</string>
+      <string>DejaVu Sans</string>
+      <string>Menlo</string>
+      <string>DejaVu Sans Mono</string>
     </edit>
   </match>
 </fontconfig>

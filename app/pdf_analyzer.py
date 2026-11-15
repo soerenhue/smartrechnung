@@ -29,21 +29,43 @@ class ExtractedLayout:
     accent_color: str = "#3b82f6"
     text_color: str = "#111827"
     font_family: str = "DejaVu Sans"
+    # 'sans' | 'serif' | 'mono' - bestimmt, welche Fallback-Kette eingesetzt wird,
+    # wenn die gewuenschte Font auf dem Rechner nicht installiert ist
+    font_class: str = "sans"
     logo_bytes: Optional[bytes] = None
     logo_ext: str = "png"
-    # Groessen-Hierarchie in pt
     base_font_size: float = 10.0
     heading_font_size: float = 20.0
-    # Grobe Positionen in Prozent der Seitenbreite/-hoehe
     logo_x_pct: float = 70.0
     logo_y_pct: float = 3.0
     logo_width_pct: float = 25.0
     buyer_y_pct: float = 25.0
     items_y_pct: float = 45.0
-    # Fuer Debug / Weiterverarbeitung
     detected_fonts: list[str] = field(default_factory=list)
     detected_colors: list[str] = field(default_factory=list)
     table_column_xs: list[float] = field(default_factory=list)
+
+
+# Bekannte Fonts auf stilistische Klassen abgebildet. Fontconfig und WeasyPrint
+# ersetzen bei nicht gefundener Font eine stilistisch passende aus derselben
+# Klasse (statt eine wahllos andere).
+_SERIF_FONTS = {"times", "georgia", "garamond", "cambria", "palatino",
+                "baskerville", "didot", "bodoni", "minion", "caslon",
+                "charter", "merriweather", "playfair", "lora", "crimson",
+                "pt serif", "libre", "source serif"}
+_MONO_FONTS = {"courier", "menlo", "monaco", "consolas", "roboto mono",
+               "source code", "fira code", "jetbrains mono", "sf mono"}
+
+
+def _classify_font(name: str) -> str:
+    n = name.lower()
+    for s in _SERIF_FONTS:
+        if s in n:
+            return "serif"
+    for m in _MONO_FONTS:
+        if m in n:
+            return "mono"
+    return "sans"
 
 
 def _rgb_to_hex(r: float, g: float, b: float) -> str:
@@ -179,6 +201,7 @@ def analyze_pdf(pdf_bytes: bytes) -> ExtractedLayout:
             clean = re.sub(r"^[A-Z]{6}\+", "", top_font)
             clean = clean.split(",")[0].split("-")[0]
             layout.font_family = clean or "Helvetica"
+            layout.font_class = _classify_font(clean)
             layout.detected_fonts = [f for f, _ in font_counter.most_common(5)]
 
         # Groessen

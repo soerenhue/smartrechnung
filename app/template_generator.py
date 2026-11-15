@@ -23,11 +23,11 @@ _TEMPLATE_HEAD = r"""<!doctype html>
                     font-size: 7.5pt; color: %MUTED_COLOR%; }
   }
   * { box-sizing: border-box; }
-  /* Garantierter Font-Fallback: DejaVu Sans ist im App-Bundle und
-     immer verfuegbar, auch wenn die PDF-Vorlage eine custom Font
-     referenzierte, die auf dem User-Mac nicht installiert ist. */
+  /* Stilistisch passender Font-Fallback: wenn die gewuenschte Font
+     nicht installiert ist, wird eine Font aus derselben Klasse
+     (serif/sans/mono) genutzt - nie ein wahlloser Ersatz. */
   html, body { margin: 0; padding: 0;
-               font-family: "%FONT_FAMILY%", "Helvetica Neue", Helvetica, Arial, "DejaVu Sans", sans-serif;
+               font-family: %FONT_FALLBACK%;
                font-size: %BASE_SIZE%pt; color: %TEXT_COLOR%; }
   h1 { color: %PRIMARY_COLOR%; font-size: %HEADING_SIZE%pt;
        margin: 0 0 4mm 0; font-weight: 600; }
@@ -166,6 +166,20 @@ _TEMPLATE_HEAD = r"""<!doctype html>
 """
 
 
+def _fallback_chain_for(font_family: str, font_class: str) -> str:
+    """Stilistisch passende Fallback-Kette: eine Serif-Font bekommt Serif-Fallbacks,
+    eine Sans-Font bekommt Sans-Fallbacks usw. Falls die urspruengliche Font nicht
+    installiert ist, sucht fontconfig eine aus derselben Klasse."""
+    if font_class == "serif":
+        return (f'"{font_family}", Georgia, "Times New Roman", Times, '
+                f'"DejaVu Serif", serif')
+    if font_class == "mono":
+        return (f'"{font_family}", Menlo, Monaco, Consolas, '
+                f'"DejaVu Sans Mono", monospace')
+    return (f'"{font_family}", "Helvetica Neue", Helvetica, Arial, '
+            f'"DejaVu Sans", sans-serif')
+
+
 def generate_template(layout) -> str:
     """Nimmt ExtractedLayout und erzeugt eine fertige Jinja2-HTML-Vorlage als String."""
     muted = "#6b7280"
@@ -175,6 +189,7 @@ def generate_template(layout) -> str:
         "%TEXT_COLOR%": layout.text_color,
         "%MUTED_COLOR%": muted,
         "%FONT_FAMILY%": layout.font_family,
+        "%FONT_FALLBACK%": _fallback_chain_for(layout.font_family, layout.font_class),
         "%BASE_SIZE%": f"{max(9, min(12, layout.base_font_size)):.1f}",
         "%HEADING_SIZE%": f"{max(14, min(24, layout.heading_font_size)):.1f}",
         "%LOGO_X%": f"{max(0, min(85, layout.logo_x_pct)):.1f}",
