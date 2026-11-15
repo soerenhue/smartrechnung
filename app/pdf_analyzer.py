@@ -1,12 +1,12 @@
-"""Analysiert eine hochgeladene PDF-Rechnung und extrahiert Layout-Info,
-aus der sich eine neue HTML/CSS-Vorlage bauen laesst.
+"""Analysiert eine hochgeladene PDF-Rechnung und extrahiert Layout-Infos
+für die neue HTML-Vorlage. Wird NICHT als Bild übernommen (bleibt scharf
+bei jeder Druckauflösung), sondern sauber nachgebaut.
 
-Erkennt:
-  - Logo (groesstes Bild im oberen Drittel) -> wird extrahiert und abgelegt
-  - Dominante Farbe (Primaerfarbe) + Akzentfarbe aus farbigen Bereichen
-  - Haeufigste Schriftart + Groessen
-  - Tabellen-artige Strukturen (Rechnungspositionen)
-  - Typische Felder (Rechnungsnummer, Datum, Summen) ueber Regex
+Extrahiert:
+  - Logo (größtes Bild im oberen Drittel) → wird ins Branding übernommen
+  - Dominante Farben (Primär + Akzent)
+  - Häufigste Schriftart + Größen
+  - Grobe Positionen (Empfänger-Block, Positionen-Tabelle)
 """
 
 from __future__ import annotations
@@ -29,8 +29,6 @@ class ExtractedLayout:
     accent_color: str = "#3b82f6"
     text_color: str = "#111827"
     font_family: str = "DejaVu Sans"
-    # 'sans' | 'serif' | 'mono' - bestimmt, welche Fallback-Kette eingesetzt wird,
-    # wenn die gewuenschte Font auf dem Rechner nicht installiert ist
     font_class: str = "sans"
     logo_bytes: Optional[bytes] = None
     logo_ext: str = "png"
@@ -91,7 +89,7 @@ def _colorfulness(hex_: str) -> float:
 
 
 def analyze_pdf(pdf_bytes: bytes) -> ExtractedLayout:
-    """Analysiert ein PDF und gibt ExtractedLayout zurueck."""
+    """Analysiert ein PDF und gibt ExtractedLayout zurück."""
     layout = ExtractedLayout()
     with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         if not doc.page_count:
@@ -229,10 +227,12 @@ def analyze_pdf(pdf_bytes: bytes) -> ExtractedLayout:
 
 
 def save_logo(layout: ExtractedLayout, target_dir: Path, name_stem: str = "logo-imported") -> Optional[str]:
-    """Speichert das extrahierte Logo. Gibt den Dateinamen zurueck (oder None)."""
+    """Speichert das extrahierte Logo. Gibt den Dateinamen zurück (oder None)."""
     if not layout.logo_bytes:
         return None
     target_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{name_stem}.{layout.logo_ext}"
     (target_dir / filename).write_bytes(layout.logo_bytes)
     return filename
+
+

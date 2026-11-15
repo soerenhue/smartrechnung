@@ -5,7 +5,7 @@
 {% if is_first %}
 <div class="card" style="background:#eff6ff;border-color:#93c5fd">
   <h1 style="margin-top:0">Willkommen bei SmartRechnung</h1>
-  <p>Trage einmal deine Firmendaten ein. Du kannst spaeter beliebig viele
+  <p>Trage einmal deine Firmendaten ein. Du kannst später beliebig viele
      weitere Firmen hinzufuegen und oben in der Leiste zwischen ihnen wechseln.</p>
 </div>
 {% endif %}
@@ -16,7 +16,7 @@
     <h2 style="margin-top:0">1. Firmendaten</h2>
     <p class="muted">Erscheinen auf jeder Rechnung und im eingebetteten E-Rechnungs-XML.</p>
 
-    <label>Anzeigename (nur fuer dich - z.B. "Hauptfirma" oder "Onkels Werkstatt")</label>
+    <label>Anzeigename (nur für dich - z.B. "Hauptfirma" oder "Onkels Werkstatt")</label>
     <input name="display_name" value="{{ company.display_name if company else '' }}" required>
 
     <div class="grid">
@@ -26,7 +26,7 @@
       <div><label>E-Mail *</label>
         <input name="seller_email" required type="email" value="{{ company.seller_email if company else '' }}"
                placeholder="rechnung@firma.de"></div>
-      <div><label>Strasse + Nummer *</label>
+      <div><label>Straße + Nummer *</label>
         <input name="seller_street" required value="{{ company.seller_street if company else '' }}"></div>
       <div><label>Land</label>
         <input name="seller_country" value="{{ company.seller_country if company else 'DE' }}" maxlength="2"></div>
@@ -56,7 +56,7 @@
     </select>
     <p class="muted">Bei Kleinunternehmer und umsatzsteuerbefreit wird der
        Pflichthinweis automatisch auf jede Rechnung geschrieben, und alle
-       Positionen muessen 0% USt haben.</p>
+       Positionen müssen 0% USt haben.</p>
   </div>
 
   <div class="card">
@@ -78,7 +78,7 @@
         <span><strong>QR-Code zum Bezahlen auf jede Rechnung drucken</strong></span>
       </label>
       <p class="muted" style="margin:6px 0 0 24px">
-        Dein Kunde oeffnet seine Banking-App (Sparkasse, Volksbank, N26, ING, etc.),
+        Dein Kunde öffnet seine Banking-App (Sparkasse, Volksbank, N26, ING, etc.),
         scannt den Code mit der Kamera - und alle Felder (Empfaenger, IBAN, Betrag,
         Verwendungszweck) sind automatisch ausgefuellt. Er muss nur noch bestaetigen.
         Nach EPC-Standard (Giro-Code), funktioniert mit allen deutschen Banken.
@@ -102,7 +102,7 @@
        <code>{year}-{nn:03d}</code> &rarr; <strong>2026-001</strong>,
        <code>RE-{yy}{mm:02d}-{nn:04d}</code> &rarr; <strong>RE-2611-0001</strong>,
        <code>{year}/{nn}</code> &rarr; <strong>2026/42</strong>.
-       Beim Schreiben einer Rechnung kannst du die Nummer trotzdem noch von Hand ueberschreiben.</p>
+       Beim Schreiben einer Rechnung kannst du die Nummer trotzdem noch von Hand überschreiben.</p>
   </div>
 
 {% if company %}
@@ -127,7 +127,7 @@
            dort frei bearbeiten oder eine eigene hinzufuegen.</p>
       </div>
       <div></div>
-      <div><label>Primaerfarbe</label>
+      <div><label>Primärfarbe</label>
         <input name="primary_color" type="color" value="{{ branding_for_form.primary_color }}"></div>
       <div><label>Akzentfarbe</label>
         <input name="accent_color" type="color" value="{{ branding_for_form.accent_color }}"></div>
@@ -148,7 +148,7 @@
     <label>Neues Logo (PNG/JPG/SVG)</label>
     <input type="file" name="logo" accept="image/*">
 
-    <h3>Fusszeilen (3 Zeilen)</h3>
+    <h3>Fußzeilen (3 Zeilen)</h3>
     <div><label>Zeile 1</label><input name="footer_line_1" value="{{ branding_for_form.footer_line_1 }}"></div>
     <div><label>Zeile 2</label><input name="footer_line_2" value="{{ branding_for_form.footer_line_2 }}"></div>
     <div><label>Zeile 3</label><input name="footer_line_3" value="{{ branding_for_form.footer_line_3 }}"></div>

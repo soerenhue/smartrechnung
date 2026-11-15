@@ -26,9 +26,9 @@
         <td>{{ c.tax_id or '-' }}</td>
         <td class="right">{{ c.use_count }}x</td>
         <td>
-          <form method="post" action="/kunden/{{ c.id }}/loeschen" style="display:inline"
-                onsubmit="return confirm('Kunden loeschen? Rechnungen an diesen Kunden bleiben erhalten.')">
-            <button class="btn btn-secondary" style="color:#dc2626" type="submit">Loeschen</button>
+          <form method="post" action="/kunden/{{ c.id }}/löschen" style="display:inline"
+                onsubmit="return confirm('Kunden löschen? Rechnungen an diesen Kunden bleiben erhalten.')">
+            <button class="btn btn-secondary" style="color:#dc2626" type="submit">Löschen</button>
           </form>
         </td>
       </tr>

@@ -4,11 +4,11 @@
 <div class="card">
   <h1>Rechnungen</h1>
   {% if chain_issues %}
-    <p class="err"><strong>Achtung:</strong> Hash-Ketten-Pruefung fehlgeschlagen:
+    <p class="err"><strong>Achtung:</strong> Hash-Ketten-Prüfung fehlgeschlagen:
       <ul>{% for i in chain_issues %}<li>{{ i.invoice }}: {{ i.problem }}</li>{% endfor %}</ul>
     </p>
   {% else %}
-    <p class="ok">&#10003; Hash-Kette ist konsistent - keine nachtraeglichen Aenderungen erkannt.</p>
+    <p class="ok">&#10003; Hash-Kette ist konsistent - keine nachtraeglichen Änderungen erkannt.</p>
   {% endif %}
 
   <p><a class="btn" href="/neu">+ Neue Rechnung</a></p>

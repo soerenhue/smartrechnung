@@ -48,7 +48,7 @@ with engine.begin() as conn:
         conn.exec_driver_sql("ALTER TABLE invoices ADD COLUMN qr_code_filename VARCHAR(256) DEFAULT ''")
 
     # Kunden-Tabelle wird durch Base.metadata.create_all automatisch angelegt,
-    # falls sie noch nicht existiert (Upgrade-Pfad fuer bestehende DBs).
+    # falls sie noch nicht existiert (Upgrade-Pfad für bestehende DBs).
 
 
 app = FastAPI(title="E-Rechnung", docs_url=None, redoc_url=None, openapi_url=None)
@@ -99,9 +99,9 @@ async def http_err(request: Request, exc: StarletteHTTPException):
 async def validation_err(request: Request, exc: RequestValidationError):
     first = exc.errors()[0] if exc.errors() else {}
     loc = " - ".join(str(x) for x in first.get("loc", []))
-    msg = first.get("msg", "Eingabe ungueltig.")
-    return _err_page(request, "Eingabe nicht vollstaendig",
-                     f"Bitte pruefe das Feld: {loc}. ({msg})", 400)
+    msg = first.get("msg", "Eingabe ungültig.")
+    return _err_page(request, "Eingabe nicht vollständig",
+                     f"Bitte prüfe das Feld: {loc}. ({msg})", 400)
 
 
 @app.exception_handler(Exception)
@@ -272,7 +272,7 @@ async def template_wizard_save(slug: str, request: Request):
                          "Bitte lade eine PDF-Rechnung hoch, aus der die Vorlage gebaut werden soll.", 400)
     pdf_bytes = await upload.read()
     if not pdf_bytes.startswith(b"%PDF"):
-        return _err_page(request, "Keine gueltige PDF",
+        return _err_page(request, "Keine gültige PDF",
                          "Die Datei konnte nicht als PDF gelesen werden.", 400)
 
     try:
@@ -284,7 +284,7 @@ async def template_wizard_save(slug: str, request: Request):
     # Logo speichern (falls erkannt)
     logo_filename = save_logo(layout, c.assets_dir, name_stem="logo-imported")
 
-    # HTML-Vorlage erzeugen
+    # HTML-Vorlage frisch generieren (keine Bildkopie - alles scharfer Text)
     html = generate_template(layout)
     template_name = form.get("template_name") or "importiert.html"
     if not template_name.endswith(".html"):
@@ -309,7 +309,7 @@ async def template_wizard_save(slug: str, request: Request):
                     "template_name": template_name})
 
 
-@app.post("/firmen/{slug}/loeschen")
+@app.post("/firmen/{slug}/löschen")
 def company_delete(slug: str, request: Request):
     delete_company(slug)
     resp = RedirectResponse("/firmen", status_code=303)
@@ -330,7 +330,7 @@ def new_invoice_form(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/firmen/neu?first=1", status_code=303)
     if not c.is_configured():
         return RedirectResponse(f"/firmen/{c.slug}", status_code=303)
-    # Gespeicherte Kunden fuer das Dropdown, sortiert nach letzter Nutzung
+    # Gespeicherte Kunden für das Dropdown, sortiert nach letzter Nutzung
     customers = (
         db.query(Customer)
         .filter(Customer.company_slug == c.slug)
@@ -393,13 +393,13 @@ async def new_invoice_submit(request: Request, db: Session = Depends(get_db)):
 
     items = _parse_items(form)
     if not items:
-        return _err_page(request, "Rechnung unvollstaendig",
+        return _err_page(request, "Rechnung unvollständig",
                          "Bitte mindestens eine Rechnungsposition eintragen.", 400)
 
     try:
         data = _parse_invoice_in(form)
     except Exception as e:
-        return _err_page(request, "Eingabe ungueltig", str(e), 400)
+        return _err_page(request, "Eingabe ungültig", str(e), 400)
 
     # Pflicht-Check VOR dem Erzeugen
     issues = preflight.check_company(c) + preflight.check_invoice(data, c)
@@ -410,7 +410,7 @@ async def new_invoice_submit(request: Request, db: Session = Depends(get_db)):
             "issues": issues,
         }, status_code=400)
 
-    # Pflichthinweis automatisch in notes ergaenzen (falls nicht schon enthalten)
+    # Pflichthinweis automatisch in notes ergänzen (falls nicht schon enthalten)
     notice = preflight.mandatory_notice(c, data.reverse_charge)
     if notice and notice not in data.notes:
         data.notes = (data.notes + ("\n\n" if data.notes else "") + notice).strip()
@@ -419,7 +419,7 @@ async def new_invoice_submit(request: Request, db: Session = Depends(get_db)):
         if mode == "upload":
             upload = form.get("pdf_file")
             if not hasattr(upload, "filename") or not upload.filename:
-                return _err_page(request, "PDF fehlt", "Bitte eine PDF-Datei auswaehlen.", 400)
+                return _err_page(request, "PDF fehlt", "Bitte eine PDF-Datei auswählen.", 400)
             pdf_bytes = await upload.read()
             inv = create_invoice_from_pdf(db, data, c, pdf_bytes)
         else:
@@ -433,9 +433,9 @@ async def new_invoice_submit(request: Request, db: Session = Depends(get_db)):
     except InvoiceNumberTakenError as e:
         return _err_page(request, "Rechnungsnummer bereits vergeben", str(e), 409)
     except SellerNotConfiguredError as e:
-        return _err_page(request, "Firma nicht vollstaendig eingerichtet", str(e), 400)
+        return _err_page(request, "Firma nicht vollständig eingerichtet", str(e), 400)
     except ValueError as e:
-        return _err_page(request, "Ungueltige Eingabe", str(e), 400)
+        return _err_page(request, "Ungültige Eingabe", str(e), 400)
 
     return RedirectResponse(f"/rechnung/{inv.id}", status_code=303)
 
@@ -455,7 +455,7 @@ def customers_list(request: Request, db: Session = Depends(get_db)):
     return _render(request, "customers.html", {"customers_list": rows})
 
 
-@app.post("/kunden/{cust_id}/loeschen")
+@app.post("/kunden/{cust_id}/löschen")
 def customer_delete(cust_id: int, request: Request, db: Session = Depends(get_db)):
     c = active_company(request)
     cust = db.get(Customer, cust_id)
@@ -550,14 +550,14 @@ Hybrid-PDF (PDF/A-3 mit eingebettetem factur-x.xml) nach ZUGFeRD 2.x /
 EN 16931 erzeugt.
 
 ## Erfassung
-Erfassung ueber Web-Formular im lokalen Browserfenster. Pflichtangaben nach
-UStG § 14 werden technisch vor dem Erzeugen geprueft; Rechnungsnummern sind
+Erfassung über Web-Formular im lokalen Browserfenster. Pflichtangaben nach
+UStG § 14 werden technisch vor dem Erzeugen geprüft; Rechnungsnummern sind
 pro Firma eindeutig.
 
-## Unveraenderbarkeit
-Jede Rechnung erhaelt einen SHA-256-Hash ueber ihren normalisierten Inhalt.
+## Unveränderbarkeit
+Jede Rechnung erhaelt einen SHA-256-Hash über ihren normalisierten Inhalt.
 Dieser Hash wird mit dem Hash der vorherigen Rechnung derselben Firma
-verkettet. Jede nachtraegliche Aenderung bricht die Kette und wird in der
+verkettet. Jede nachtraegliche Änderung bricht die Kette und wird in der
 Oberflaeche rot hervorgehoben.
 
 ## Aufbewahrung

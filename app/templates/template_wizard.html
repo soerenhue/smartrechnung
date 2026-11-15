@@ -6,13 +6,13 @@
   <h1>Rechnungsvorlage aus deiner bestehenden PDF-Rechnung bauen</h1>
   <p class="muted">
     Lad eine bestehende PDF-Rechnung hoch - die App analysiert Logo, Farben,
-    Schriftart und Layout und baut daraus eine Vorlage, die alle zukuenftigen
+    Schriftart und Layout und baut daraus eine Vorlage, die alle zukünftigen
     Rechnungen in genau diesem Stil erzeugt.
   </p>
   <p class="muted" style="background:#fffbea;padding:10px;border-left:3px solid #f59e0b;border-radius:4px">
-    <strong>Hinweis:</strong> Die Analyse ist eine Annaeherung, keine Pixel-perfekte Kopie.
-    Bei ueblichen Rechnungs-Layouts (Logo oben, Positionen in der Mitte,
-    Summen unten) funktioniert sie sehr gut. Bei sehr aussergewoehnlichem
+    <strong>Hinweis:</strong> Die Analyse ist eine Annäherung, keine Pixel-perfekte Kopie.
+    Bei üblichen Rechnungs-Layouts (Logo oben, Positionen in der Mitte,
+    Summen unten) funktioniert sie sehr gut. Bei sehr außergewoehnlichem
     Design kannst du die generierte HTML-Vorlage danach manuell nachjustieren
     (sie liegt in <code>{{ company.templates_dir }}</code>).
   </p>
@@ -22,7 +22,7 @@
     <label>Deine bestehende Rechnung (als PDF)</label>
     <input type="file" name="pdf_file" accept="application/pdf" required>
 
-    <label style="margin-top:14px">Name fuer die neue Vorlage</label>
+    <label style="margin-top:14px">Name für die neue Vorlage</label>
     <input type="text" name="template_name" value="meine-vorlage.html">
     <p class="muted">Datei wird gespeichert als <code>{{ company.templates_dir }}/[Name].html</code></p>
 
@@ -36,18 +36,18 @@
   {% if saved and layout %}
   <div style="background:#ecfdf5;border:1px solid #10b981;border-radius:8px;padding:16px;margin-top:16px">
     <h2 style="margin-top:0;color:#065f46">&#10003; Vorlage erstellt: <code>{{ template_name }}</code></h2>
-    <p>Sie ist jetzt als aktive Vorlage fuer <strong>{{ company.display_name }}</strong> gesetzt.
-       Alle neuen Rechnungen fuer diese Firma werden in diesem Stil generiert.</p>
+    <p>Sie ist jetzt als aktive Vorlage für <strong>{{ company.display_name }}</strong> gesetzt.
+       Alle neuen Rechnungen für diese Firma werden in diesem Stil generiert.</p>
 
     <h3>Was ich erkannt habe</h3>
     <table style="font-size:0.9rem">
-      <tr><td><strong>Primaerfarbe</strong></td><td><span style="display:inline-block;width:20px;height:20px;background:{{ layout.primary_color }};vertical-align:middle;border:1px solid #ccc;border-radius:3px"></span> <code>{{ layout.primary_color }}</code></td></tr>
+      <tr><td><strong>Primärfarbe</strong></td><td><span style="display:inline-block;width:20px;height:20px;background:{{ layout.primary_color }};vertical-align:middle;border:1px solid #ccc;border-radius:3px"></span> <code>{{ layout.primary_color }}</code></td></tr>
       <tr><td><strong>Akzentfarbe</strong></td><td><span style="display:inline-block;width:20px;height:20px;background:{{ layout.accent_color }};vertical-align:middle;border:1px solid #ccc;border-radius:3px"></span> <code>{{ layout.accent_color }}</code></td></tr>
       <tr><td><strong>Schriftart</strong></td><td><code>{{ layout.font_family }}</code></td></tr>
       <tr><td><strong>Logo</strong></td>
           <td>{% if layout.logo_bytes %}&#10003; aus PDF extrahiert ({{ layout.logo_ext|upper }}){% else %}Kein Logo gefunden{% endif %}</td></tr>
-      <tr><td><strong>Basis-Schriftgroesse</strong></td><td>{{ '%.1f'|format(layout.base_font_size) }} pt</td></tr>
-      <tr><td><strong>Ueberschriften-Groesse</strong></td><td>{{ '%.1f'|format(layout.heading_font_size) }} pt</td></tr>
+      <tr><td><strong>Basis-Schriftgröße</strong></td><td>{{ '%.1f'|format(layout.base_font_size) }} pt</td></tr>
+      <tr><td><strong>Überschriften-Größe</strong></td><td>{{ '%.1f'|format(layout.heading_font_size) }} pt</td></tr>
     </table>
 
     <p style="margin-top:14px">

@@ -65,7 +65,7 @@ def _last_chain_hash_for(db: Session, company: Company) -> str:
 def _build_invoice_entity(data: InvoiceIn, company: Company) -> Invoice:
     if not company.is_configured():
         raise SellerNotConfiguredError(
-            f"Firma '{company.display_name}' ist nicht vollstaendig eingerichtet."
+            f"Firma '{company.display_name}' ist nicht vollständig eingerichtet."
         )
 
     inv = Invoice(
@@ -171,7 +171,7 @@ def create_invoice(db: Session, data: InvoiceIn, company: Company) -> Invoice:
 
 def create_invoice_from_pdf(db: Session, data: InvoiceIn, company: Company, pdf_bytes: bytes) -> Invoice:
     if not pdf_bytes or pdf_bytes[:4] != b"%PDF":
-        raise ValueError("Die hochgeladene Datei ist kein gueltiges PDF.")
+        raise ValueError("Die hochgeladene Datei ist kein gültiges PDF.")
     inv = _build_invoice_entity(data, company)
     _maybe_make_qr(inv, company)
     return _finalize(db, inv, company, pdf_bytes)

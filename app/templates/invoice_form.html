@@ -31,13 +31,13 @@
       <div><label>Rechnungsnummer *</label><input name="invoice_number" value="{{ suggested_number }}" required></div>
       <div><label>Rechnungsdatum *</label><input type="date" name="issue_date" required></div>
       <div><label>Leistungsdatum *</label><input type="date" name="delivery_date" required></div>
-      <div><label>Faellig am *</label><input type="date" name="due_date" required></div>
+      <div><label>Fällig am *</label><input type="date" name="due_date" required></div>
     </div>
 
-    <h3>Rechnungsempfaenger</h3>
+    <h3>Rechnungsempfänger</h3>
     {% if customers %}
     <div style="background:#eff6ff;padding:12px 14px;border-radius:6px;margin-bottom:14px;border-left:3px solid #3b82f6">
-      <label><strong>Vorhandenen Kunden auswaehlen</strong> (oder unten neu eintippen)</label>
+      <label><strong>Vorhandenen Kunden auswählen</strong> (oder unten neu eintippen)</label>
       <select id="customer_select" onchange="loadCustomer(this.value)" style="margin-top:6px">
         <option value="">-- Neuer Kunde (Felder unten ausfuellen) --</option>
         {% for cust in customers %}
@@ -49,7 +49,7 @@
 
     <div class="grid">
       <div><label>Firma / Name *</label><input name="buyer_name" required></div>
-      <div><label>Strasse + Nr *</label><input name="buyer_street" required></div>
+      <div><label>Straße + Nr *</label><input name="buyer_street" required></div>
       <div><label>PLZ *</label><input name="buyer_postcode" required></div>
       <div><label>Ort *</label><input name="buyer_city" required></div>
       <div><label>Land</label><input name="buyer_country" value="DE" maxlength="2"></div>
@@ -60,7 +60,7 @@
     <div style="margin-top:8px">
       <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0">
         <input type="checkbox" name="save_customer" value="1" checked style="width:auto;margin:0">
-        <span class="muted">Kunden fuer spaeter speichern (fuer naechste Rechnung an denselben)</span>
+        <span class="muted">Kunden für später speichern (für naechste Rechnung an denselben)</span>
       </label>
     </div>
 
@@ -71,7 +71,7 @@
         <div><label>Menge</label><input name="qty_1" value="1" type="number" step="0.001"></div>
         <div><label>Einheit</label>
           <select name="unit_1">
-            <option value="C62">Stueck</option><option value="HUR">Stunde</option>
+            <option value="C62">Stück</option><option value="HUR">Stunde</option>
             <option value="DAY">Tag</option><option value="MTR">Meter</option>
             <option value="KGM">kg</option><option value="LTR">Liter</option>
             <option value="XPP">Pauschal</option>
@@ -90,7 +90,7 @@
     {% if active.tax_regime == 'regular' %}
     <div style="background:#f3f4f6; padding:10px; border-radius:6px; margin-bottom:12px">
       <label><input type="checkbox" name="reverse_charge" value="1"> Reverse Charge
-        (Steuerschuld geht auf den Leistungsempfaenger ueber - alle Positionen 0% USt)</label>
+        (Steuerschuld geht auf den Leistungsempfaenger über - alle Positionen 0% USt)</label>
     </div>
     {% elif active.tax_regime == 'small_business' %}
     <div style="background:#fef3c7; padding:10px; border-radius:6px; margin-bottom:12px" class="muted">
@@ -130,7 +130,7 @@ function addRow() {
       <div><label>Menge</label><input name="qty_${n}" value="1" type="number" step="0.001"></div>
       <div><label>Einheit</label>
         <select name="unit_${n}">
-          <option value="C62">Stueck</option><option value="HUR">Stunde</option>
+          <option value="C62">Stück</option><option value="HUR">Stunde</option>
           <option value="DAY">Tag</option><option value="MTR">Meter</option>
           <option value="KGM">kg</option><option value="LTR">Liter</option>
           <option value="XPP">Pauschal</option>

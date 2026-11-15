@@ -18,7 +18,7 @@
   <p><strong>Empfaenger:</strong> {{ inv.buyer_name }}, {{ inv.buyer_street }}, {{ inv.buyer_postcode }} {{ inv.buyer_city }}</p>
   <p><strong>Rechnungsdatum:</strong> {{ inv.issue_date.strftime('%d.%m.%Y') }} ·
      <strong>Leistungsdatum:</strong> {{ inv.delivery_date.strftime('%d.%m.%Y') }} ·
-     <strong>Faellig:</strong> {{ inv.due_date.strftime('%d.%m.%Y') }}</p>
+     <strong>Fällig:</strong> {{ inv.due_date.strftime('%d.%m.%Y') }}</p>
 
   <table>
     <thead><tr>

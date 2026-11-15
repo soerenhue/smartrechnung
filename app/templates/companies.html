@@ -21,13 +21,13 @@
             <span class="muted">naechste: {{ c.format_next_number() }}</span></td>
         <td>
           {% if c.is_configured() %}<span class="ok">&#10003; bereit</span>
-          {% else %}<span class="warn">unvollstaendig</span>{% endif %}
+          {% else %}<span class="warn">unvollständig</span>{% endif %}
         </td>
         <td>
           <a href="/firmen/{{ c.slug }}">Bearbeiten</a>
-          <form method="post" action="/firmen/{{ c.slug }}/loeschen" style="display:inline"
-                onsubmit="return confirm('Firma wirklich loeschen? Rechnungsdaten dieser Firma bleiben erhalten.')">
-            <button class="btn btn-secondary" style="color:#dc2626" type="submit">Loeschen</button>
+          <form method="post" action="/firmen/{{ c.slug }}/löschen" style="display:inline"
+                onsubmit="return confirm('Firma wirklich löschen? Rechnungsdaten dieser Firma bleiben erhalten.')">
+            <button class="btn btn-secondary" style="color:#dc2626" type="submit">Löschen</button>
           </form>
         </td>
       </tr>
