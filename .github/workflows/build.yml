@@ -129,6 +129,14 @@ jobs:
           ls -1 "$FRAMEWORKS" | wc -l
           echo "Dateien im Frameworks-Verzeichnis"
 
+          # Die nackte Unix-Binary neben der .app nicht ausliefern - sie verwirrt
+          # nur, weil sie ohne .app-Wrapper die System-Libs nicht findet.
+          if [ -f "dist/SmartRechnung" ]; then
+            rm -f "dist/SmartRechnung"
+            echo "Nackte Binary 'dist/SmartRechnung' entfernt - nur .app wird ausgeliefert"
+          fi
+          ls -la dist/
+
       - name: Package
         shell: bash
         run: ${{ matrix.archive }}
