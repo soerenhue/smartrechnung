@@ -46,11 +46,12 @@ def _bootstrap_macos_libs() -> None:
         os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
             f"{frameworks}:{current}" if current else str(frameworks)
         )
-        for p in sorted(frameworks.glob("*.dylib")):
-            try:
-                ctypes.CDLL(str(p), mode=ctypes.RTLD_GLOBAL)
-            except OSError:
-                pass
+        # WICHTIG: KEINE ctypes.CDLL-Preloads! Hat zuvor zu GObject-
+        # Double-Registration gefuehrt ("cannot register existing type
+        # PangoFontMap"), weil libgobject-2.0.dylib UND libgobject-2.0.0.dylib
+        # beide als separate ctypes-Instanzen geladen wurden und GType
+        # zweimal registriert wurde. cffi findet die Libs ohnehin ueber
+        # DYLD_FALLBACK_LIBRARY_PATH - und laedt jede nur einmal.
 
     # Fontconfig: wir schreiben beim Start eine fonts.conf MIT ABSOLUTEN PFADEN
     # ins User-Verzeichnis. Grund: Fontconfig mag keine relativen Pfade in
