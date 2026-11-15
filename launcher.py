@@ -21,6 +21,12 @@ import webbrowser
 from pathlib import Path
 
 
+# Fontconfig- und Pango-Debug aktivieren, damit wir in stderr/Logs sehen,
+# was beim PDF-Erzeugen schief geht. FC_DEBUG=1 reicht fuer "matching" output.
+os.environ["FC_DEBUG"] = "1"
+os.environ["PANGOCAIRO_BACKEND"] = "fc"
+
+
 def _bootstrap_macos_libs() -> None:
     """Vor WeasyPrint-Import:
     - gebuendelte dylibs via ctypes vorladen (gobject/pango/cairo/...)
@@ -122,6 +128,22 @@ def _log_dir() -> Path:
 
 
 LOG_FILE = _log_dir() / "startup.log"
+STDERR_FILE = _log_dir() / "stderr.log"
+
+
+# stderr/stdout umleiten in eine Datei, damit native Pango/Cairo-Fehler
+# (die bisher auf den Terminal gingen und bei .app-Launch verloren waren)
+# abgefangen werden. Das machen wir VOR allem anderen.
+try:
+    _err = open(STDERR_FILE, "a", buffering=1, encoding="utf-8")
+    _err.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+    _err.flush()
+    os.dup2(_err.fileno(), 2)  # FD 2 = stderr
+    os.dup2(_err.fileno(), 1)  # FD 1 = stdout
+    sys.stderr = _err
+    sys.stdout = _err
+except Exception:
+    pass
 
 
 def log(msg: str) -> None:

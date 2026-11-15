@@ -85,15 +85,19 @@ jobs:
           FRAMEWORKS="$APP/Contents/Frameworks"
           mkdir -p "$FRAMEWORKS"
 
-          # Alle Libs, die WeasyPrint / fontconfig / cairo zur Laufzeit erwartet
+          # Alle Libs, die WeasyPrint / fontconfig / cairo zur Laufzeit erwartet.
+          # harfbuzz-subset ist kritisch: Pango 1.50+ braucht es, weil es
+          # beim Layout nach ihm greift - fehlt es, ist das ein stiller
+          # nativer Crash OHNE Python-Trace.
           LIBS="libgobject-2.0 libglib-2.0 libgio-2.0 libgmodule-2.0 libgthread-2.0 \
                 libpango-1.0 libpangoft2-1.0 libpangocairo-1.0 \
                 libcairo libcairo-gobject \
                 libgdk_pixbuf-2.0 \
-                libharfbuzz libfontconfig libfreetype libpng16 \
+                libharfbuzz libharfbuzz-subset libharfbuzz-cairo libharfbuzz-gobject \
+                libfontconfig libfreetype libpng16 \
                 libffi libintl libpcre2-8 libpixman-1 \
                 libxml2 libxcb libxau libxdmcp libbrotlidec libbrotlicommon \
-                libgraphite2"
+                libgraphite2 libz liblzma libexpat libiconv"
 
           for prefix in /opt/homebrew/lib /usr/local/lib; do
             if [ -d "$prefix" ]; then
@@ -121,6 +125,14 @@ jobs:
           for f in "$FRAMEWORKS"/*.dylib; do
             install_name_tool -id "@executable_path/../Frameworks/$(basename $f)" "$f" 2>/dev/null || true
           done
+
+          # Diagnose: welche externen Libraries referenzieren die gebundelten
+          # Libs noch? Alles, was NICHT auf @executable_path/@rpath/@loader_path
+          # oder /System/Library zeigt, ist ein potenzielles Problem.
+          echo "=== Externe Lib-Referenzen (sollten leer oder System sein) ==="
+          for f in "$FRAMEWORKS"/*.dylib; do
+            otool -L "$f" 2>/dev/null | grep -Ev "@executable_path|@rpath|@loader_path|/System/Library|/usr/lib" | grep -v "^$f:" | head -5
+          done | sort -u | head -40
 
           # Eigene fonts.conf nach Contents/Resources kopieren
           # (zeigt auf macOS-Systemschriften statt auf Homebrew-Pfade)
