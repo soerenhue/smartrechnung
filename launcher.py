@@ -10,6 +10,7 @@ Wenn die App nicht startet, schick mir diese Datei - da steht der Grund drin.
 
 from __future__ import annotations
 
+import ctypes
 import os
 import socket
 import sys
@@ -18,6 +19,31 @@ import time
 import traceback
 import webbrowser
 from pathlib import Path
+
+
+def _bootstrap_macos_libs() -> None:
+    """Vor WeasyPrint-Import die mitgelieferten dylibs vorab per ctypes laden,
+    damit cffi/weasyprint sie beim ersten dlopen findet. Setzt zusaetzlich
+    DYLD_FALLBACK_LIBRARY_PATH fuer etwaige Child-Prozesse."""
+    if not (getattr(sys, "frozen", False) and sys.platform == "darwin"):
+        return
+    bundle_dir = Path(os.path.abspath(sys.executable)).parent  # Contents/MacOS/
+    frameworks = (bundle_dir / ".." / "Frameworks").resolve()
+    if not frameworks.is_dir():
+        return
+    current = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+    os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
+        f"{frameworks}:{current}" if current else str(frameworks)
+    )
+    # Alle dylibs mit RTLD_GLOBAL vorladen
+    for p in sorted(frameworks.glob("*.dylib")):
+        try:
+            ctypes.CDLL(str(p), mode=ctypes.RTLD_GLOBAL)
+        except OSError:
+            pass
+
+
+_bootstrap_macos_libs()
 
 
 def _log_dir() -> Path:

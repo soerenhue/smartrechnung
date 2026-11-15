@@ -69,27 +69,58 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller erechnung.spec --clean --noconfirm
 
-      # macOS: System-dylibs mit dylibbundler ins .app-Bundle kopieren
-      # damit SmartRechnung auf Rechnern ohne Homebrew laeuft
+      # macOS: System-dylibs ins .app-Bundle kopieren.
+      # WeasyPrint laedt gobject/pango/cairo erst zur LAUFZEIT ueber dlopen,
+      # d.h. die Libs sind nicht gelinkt - dylibbundler erkennt sie nicht
+      # selbststaendig. Deshalb kopieren wir sie explizit hinein und lassen
+      # dylibbundler dann die Transitive-Deps rebundeln.
       - name: Bundle dylibs (macOS)
         if: runner.os == 'macOS'
         run: |
+          set -e
           APP="dist/SmartRechnung.app"
-          if [ -d "$APP" ]; then
-            BIN="$APP/Contents/MacOS/SmartRechnung"
-            mkdir -p "$APP/Contents/Frameworks"
-            dylibbundler -od -b -x "$BIN" \
-              -d "$APP/Contents/Frameworks/" \
-              -p "@executable_path/../Frameworks/" || true
-            # Zusaetzlich alle schon gebundelten .dylib-Pfade pruefen
-            find "$APP/Contents" -name '*.dylib' | while read f; do
-              dylibbundler -of -b -x "$f" \
-                -d "$APP/Contents/Frameworks/" \
-                -p "@executable_path/../Frameworks/" 2>/dev/null || true
-            done
-            # ad-hoc-Signatur, sonst blockiert Gatekeeper die geaenderten Libs
-            codesign --force --deep --sign - "$APP" || true
+          if [ ! -d "$APP" ]; then
+            echo "Kein .app-Bundle in dist/ gefunden"; exit 1
           fi
+          FRAMEWORKS="$APP/Contents/Frameworks"
+          mkdir -p "$FRAMEWORKS"
+
+          # Alle Libs, die WeasyPrint / fontconfig / cairo zur Laufzeit erwartet
+          LIBS="libgobject-2.0 libglib-2.0 libgio-2.0 libgmodule-2.0 libgthread-2.0 \
+                libpango-1.0 libpangoft2-1.0 libpangocairo-1.0 \
+                libcairo libcairo-gobject \
+                libgdk_pixbuf-2.0 \
+                libharfbuzz libfontconfig libfreetype libpng16 \
+                libffi libintl libpcre2-8 libpixman-1 \
+                libxml2 libxcb libxau libxdmcp libbrotlidec libbrotlicommon \
+                libgraphite2"
+
+          for prefix in /opt/homebrew/lib /usr/local/lib; do
+            if [ -d "$prefix" ]; then
+              for lib in $LIBS; do
+                for f in "$prefix/${lib}"*.dylib; do
+                  [ -f "$f" ] && cp -L "$f" "$FRAMEWORKS/" 2>/dev/null || true
+                done
+              done
+            fi
+          done
+
+          echo "=== Kopierte Libs: ==="
+          ls -1 "$FRAMEWORKS" | head -40
+
+          # Jetzt alle transitiven Abhaengigkeiten umbiegen auf @executable_path/../Frameworks/
+          BIN="$APP/Contents/MacOS/SmartRechnung"
+          dylibbundler -od -b -x "$BIN" -d "$FRAMEWORKS/" -p "@executable_path/../Frameworks/" || true
+          for f in "$FRAMEWORKS"/*.dylib; do
+            dylibbundler -of -b -x "$f" -d "$FRAMEWORKS/" -p "@executable_path/../Frameworks/" 2>/dev/null || true
+          done
+
+          # Ad-hoc signieren, sonst blockt macOS die umgeschriebenen Libs
+          codesign --force --deep --sign - "$APP" || true
+
+          echo "=== Final im Frameworks: ==="
+          ls -1 "$FRAMEWORKS" | wc -l
+          echo "Dateien im Frameworks-Verzeichnis"
 
       - name: Package
         shell: bash
