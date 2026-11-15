@@ -46,14 +46,42 @@ def _bootstrap_macos_libs() -> None:
             except OSError:
                 pass
 
-    # Fontconfig: eigene Konfig verwenden, die auf macOS-Systemfonts zeigt
-    fonts_conf = resources / "fonts.conf"
-    if fonts_conf.exists():
-        os.environ["FONTCONFIG_FILE"] = str(fonts_conf)
-        os.environ["FONTCONFIG_PATH"] = str(resources)
-    # Fontconfig-Cache in ein User-schreibbares Verzeichnis
-    cache = Path.home() / ".cache" / "fontconfig"
-    cache.mkdir(parents=True, exist_ok=True)
+    # Fontconfig: wir schreiben beim Start eine fonts.conf MIT ABSOLUTEN PFADEN
+    # ins User-Verzeichnis. Grund: Fontconfig mag keine relativen Pfade in
+    # <dir>-Eintraegen, besonders nicht wenn es an verschiedenen Orten laeuft
+    # (AppTranslocation!). Darum bauen wir die Konfig live.
+    bundled_fonts = resources / "fonts"
+    user_data_dir = Path.home() / "Documents" / "SmartRechnung"
+    user_data_dir.mkdir(parents=True, exist_ok=True)
+    user_fonts_conf = user_data_dir / "fonts.conf"
+
+    fonts_conf_text = f"""<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <dir>{bundled_fonts}</dir>
+  <dir>/System/Library/Fonts</dir>
+  <dir>/Library/Fonts</dir>
+  <dir>{Path.home() / "Library" / "Fonts"}</dir>
+  <cachedir>{Path.home() / ".cache" / "fontconfig"}</cachedir>
+
+  <alias><family>serif</family><prefer>
+    <family>DejaVu Serif</family><family>Helvetica</family><family>Arial</family>
+  </prefer></alias>
+  <alias><family>sans-serif</family><prefer>
+    <family>DejaVu Sans</family><family>Helvetica Neue</family>
+    <family>Helvetica</family><family>Arial</family>
+  </prefer></alias>
+  <alias><family>monospace</family><prefer>
+    <family>DejaVu Sans Mono</family><family>Menlo</family><family>Monaco</family>
+  </prefer></alias>
+</fontconfig>
+"""
+    user_fonts_conf.write_text(fonts_conf_text, encoding="utf-8")
+    os.environ["FONTCONFIG_FILE"] = str(user_fonts_conf)
+    os.environ["FONTCONFIG_PATH"] = str(resources)
+
+    # Fontconfig-Cache
+    (Path.home() / ".cache" / "fontconfig").mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("XDG_CACHE_HOME", str(Path.home() / ".cache"))
 
 

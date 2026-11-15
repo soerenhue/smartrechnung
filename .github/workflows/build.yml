@@ -128,6 +128,18 @@ jobs:
           cp assets/fonts.conf "$APP/Contents/Resources/fonts.conf"
           echo "fonts.conf kopiert nach $APP/Contents/Resources/"
 
+          # DejaVu-Fonts direkt ins Bundle packen - garantierter Fallback,
+          # wenn die System-Fonts nicht gefunden werden oder die Vorlage eine
+          # auf dem Mac nicht installierte Font referenziert. Ohne eine gueltige
+          # Font crasht Pango nativ im write_pdf()-Call.
+          mkdir -p "$APP/Contents/Resources/fonts"
+          curl -sL https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2 \
+            -o /tmp/dejavu.tar.bz2
+          tar -xjf /tmp/dejavu.tar.bz2 -C /tmp/
+          cp /tmp/dejavu-fonts-ttf-2.37/ttf/*.ttf "$APP/Contents/Resources/fonts/"
+          echo "=== Mitgelieferte Fonts ==="
+          ls -la "$APP/Contents/Resources/fonts/"
+
           # Signatur refresh nach allen Aenderungen
           codesign --force --deep --sign - "$APP" || true
 

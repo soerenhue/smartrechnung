@@ -23,8 +23,11 @@ _TEMPLATE_HEAD = r"""<!doctype html>
                     font-size: 7.5pt; color: %MUTED_COLOR%; }
   }
   * { box-sizing: border-box; }
+  /* Garantierter Font-Fallback: DejaVu Sans ist im App-Bundle und
+     immer verfuegbar, auch wenn die PDF-Vorlage eine custom Font
+     referenzierte, die auf dem User-Mac nicht installiert ist. */
   html, body { margin: 0; padding: 0;
-               font-family: "%FONT_FAMILY%", DejaVu Sans, sans-serif;
+               font-family: "%FONT_FAMILY%", "Helvetica Neue", Helvetica, Arial, "DejaVu Sans", sans-serif;
                font-size: %BASE_SIZE%pt; color: %TEXT_COLOR%; }
   h1 { color: %PRIMARY_COLOR%; font-size: %HEADING_SIZE%pt;
        margin: 0 0 4mm 0; font-weight: 600; }
