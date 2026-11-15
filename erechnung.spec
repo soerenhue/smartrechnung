@@ -37,20 +37,17 @@ datas += collect_data_files("starlette")
 datas += collect_data_files("playwright")
 datas += [("app/templates", "app/templates")]
 
-# Playwright-Browser-Binaries (Chromium) ins Bundle packen.
-# Workflow laedt sie vorher mit "playwright install chromium" herunter.
-_browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
-if _browsers_path and os.path.isdir(_browsers_path):
-    datas += [(_browsers_path, "ms-playwright")]
-else:
-    # Fallback: Standard-Playwright-Cache
-    _default_cache = os.path.expanduser("~/Library/Caches/ms-playwright") \
-        if sys.platform == "darwin" else \
-        os.path.expanduser("~/.cache/ms-playwright") \
-        if sys.platform.startswith("linux") else \
-        os.path.expandvars("%USERPROFILE%/AppData/Local/ms-playwright")
-    if os.path.isdir(_default_cache):
-        datas += [(_default_cache, "ms-playwright")]
+# Chromium wird NICHT durch PyInstaller gepackt - PyInstaller versucht
+# sonst Chromium.app selbst zu signieren, was scheitert (Chromium hat
+# viele Nested Bundles mit eigenen Signaturen). Stattdessen kopiert der
+# Workflow Chromium NACH dem PyInstaller-Lauf direkt ins Bundle und
+# signiert einmal das gesamte SmartRechnung.app.
+# Nur auf Windows/Linux packen wir Chromium via datas, weil das dort
+# unkritisch ist.
+if not sys.platform == "darwin":
+    _browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+    if _browsers_path and os.path.isdir(_browsers_path):
+        datas += [(_browsers_path, "ms-playwright")]
 
 if sys.platform.startswith("win"):
     icon_file = "assets/icon.ico"

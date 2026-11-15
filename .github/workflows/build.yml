@@ -50,12 +50,21 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
         run: pyinstaller erechnung.spec --clean --noconfirm
 
-      - name: macOS - entferne nackte Binary + signiere
+      - name: macOS - Chromium ins Bundle kopieren + signieren
         if: runner.os == 'macOS'
         run: |
           APP="dist/SmartRechnung.app"
           [ -f "dist/SmartRechnung" ] && rm -f "dist/SmartRechnung"
-          # Ad-hoc-Signatur auf das gesamte Bundle
+
+          # Chromium nach Contents/Resources/ms-playwright kopieren
+          # (der Launcher sucht genau dort)
+          TARGET="$APP/Contents/Resources/ms-playwright"
+          mkdir -p "$TARGET"
+          cp -R "$PLAYWRIGHT_BROWSERS_PATH"/* "$TARGET/"
+          echo "=== Chromium im Bundle: ==="
+          ls -la "$TARGET" | head
+
+          # Einmalig das gesamte Bundle inklusive Chromium signieren
           codesign --force --deep --sign - --timestamp=none "$APP" || true
           ls -la dist/
 
