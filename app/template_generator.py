@@ -23,11 +23,6 @@ _TEMPLATE = r"""<!doctype html>
   @page {
     size: A4;
     margin: 20mm 18mm 25mm 18mm;
-    @bottom-center {
-      content: element(pageFooter);
-      font-size: 8pt;
-      color: %MUTED_COLOR%;
-    }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0;
@@ -89,8 +84,8 @@ _TEMPLATE = r"""<!doctype html>
   .payment .qr img { width: 26mm; height: 26mm; object-fit: contain; }
   .payment .qr .cap { font-size: 7pt; color: %MUTED_COLOR%; margin-top: 0.5mm; }
 
-  .page-footer { position: running(pageFooter); text-align: center;
-                 font-size: 7.5pt; color: %MUTED_COLOR%;
+  .page-footer { position: fixed; bottom: 8mm; left: 18mm; right: 18mm;
+                 text-align: center; font-size: 7.5pt; color: %MUTED_COLOR%;
                  border-top: 0.2mm solid #d4d4d8; padding-top: 1.5mm;
                  line-height: 1.4; }
 </style>

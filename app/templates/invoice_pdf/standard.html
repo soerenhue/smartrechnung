@@ -7,13 +7,6 @@
   @page {
     size: A4;
     margin: 20mm 18mm 28mm 18mm;
-    @bottom-center {
-      content: element(pageFooter);
-      font-size: 8pt;
-      color: {{ branding.muted_color }};
-    }
-    @bottom-right { content: "Seite " counter(page) " / " counter(pages);
-                    font-size: 8pt; color: {{ branding.muted_color }}; }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0;
@@ -42,7 +35,8 @@
   .payment { margin-top: 8mm; background: #f3f4f6; padding: 4mm; border-radius: 1.5mm; font-size: 9pt; }
   .payment strong { color: {{ branding.primary_color }}; }
   .buyer { font-size: 10pt; line-height: 1.4; }
-  .page-footer { position: running(pageFooter); text-align: center; font-size: 8pt;
+  .page-footer { position: fixed; bottom: 8mm; left: 18mm; right: 18mm;
+                 text-align: center; font-size: 8pt;
                  color: {{ branding.muted_color }}; border-top: 0.3mm solid #e5e7eb; padding-top: 2mm; }
   .page-footer div { line-height: 1.3; }
 </style>
