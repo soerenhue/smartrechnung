@@ -106,9 +106,22 @@ async def validation_err(request: Request, exc: RequestValidationError):
 
 @app.exception_handler(Exception)
 async def unexpected_err(request: Request, exc: Exception):
+    # Vollen Fehler in die startup.log schreiben, damit wir ihn sehen
+    try:
+        import traceback as _tb
+        from .config import DATA_DIR
+        import time as _time
+        with open(DATA_DIR / "startup.log", "a", encoding="utf-8") as f:
+            f.write(f"[{_time.strftime('%Y-%m-%d %H:%M:%S')}] [HTTP-FEHLER]\n")
+            f.write(_tb.format_exc())
+            f.write("\n")
+    except Exception:
+        pass
+    short = str(exc)[:500] or type(exc).__name__
     return _err_page(
         request, "Technischer Fehler",
-        f"Etwas ist unerwartet schiefgelaufen: {type(exc).__name__}. "
+        f"Etwas ist unerwartet schiefgelaufen: {type(exc).__name__}: {short}\n\n"
+        "Details stehen in Documents/SmartRechnung/startup.log. "
         "Deine bisherigen Rechnungen sind sicher gespeichert.",
         500,
     )
