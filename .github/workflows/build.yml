@@ -16,7 +16,10 @@ jobs:
             archive: "pwsh -Command Compress-Archive -Path dist/* -DestinationPath SmartRechnung-Windows.zip"
           - os: macos-latest
             artifact: SmartRechnung-macOS.zip
-            archive: "cd dist && zip -r ../SmartRechnung-macOS.zip ."
+            # -y: Symlinks als Symlinks speichern, nicht aufloesen.
+            # Sonst bricht das ZIP die Dedup-Symlinks auf, die Code-Signatur
+            # wird ungueltig und macOS meldet 'Datei ist beschaedigt'.
+            archive: "cd dist && zip -ry ../SmartRechnung-macOS.zip ."
           - os: ubuntu-latest
             artifact: SmartRechnung-Linux.tar.gz
             archive: "tar -czvf SmartRechnung-Linux.tar.gz -C dist ."
@@ -169,15 +172,11 @@ jobs:
           done
 
           # Eigene fonts.conf nach Contents/Resources kopieren
-          # (zeigt auf macOS-Systemschriften statt auf Homebrew-Pfade)
           mkdir -p "$APP/Contents/Resources"
           cp assets/fonts.conf "$APP/Contents/Resources/fonts.conf"
           echo "fonts.conf kopiert nach $APP/Contents/Resources/"
 
-          # DejaVu-Fonts direkt ins Bundle packen - garantierter Fallback,
-          # wenn die System-Fonts nicht gefunden werden oder die Vorlage eine
-          # auf dem Mac nicht installierte Font referenziert. Ohne eine gueltige
-          # Font crasht Pango nativ im write_pdf()-Call.
+          # DejaVu-Fonts direkt ins Bundle packen
           mkdir -p "$APP/Contents/Resources/fonts"
           curl -sL https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2 \
             -o /tmp/dejavu.tar.bz2
@@ -186,8 +185,18 @@ jobs:
           echo "=== Mitgelieferte Fonts ==="
           ls -la "$APP/Contents/Resources/fonts/"
 
-          # Signatur refresh nach allen Aenderungen
-          codesign --force --deep --sign - "$APP" || true
+          # Signatur ALS ALLERLETZTEN Schritt nach ALLEN Aenderungen.
+          # Vorher evtl. vorhandene Signaturen entfernen, dann frisch signieren -
+          # sonst sieht macOS Diskrepanz zwischen alten Signaturen und
+          # neu umgeschriebenen install_names und meldet 'beschaedigt'.
+          # --preserve-metadata=identifier,entitlements laesst essenzielle
+          # Metadaten erhalten, --deep signiert alle Nested Bundles (dylibs).
+          echo "=== Entferne alte Signaturen und signiere frisch ==="
+          find "$APP" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign --remove-signature {} \; 2>/dev/null || true
+          codesign --remove-signature "$APP" 2>/dev/null || true
+          codesign --force --deep --sign - --timestamp=none "$APP"
+          # Verifizieren
+          codesign --verify --deep --strict "$APP" && echo "Signatur OK" || echo "Signatur WARN"
 
           # Ad-hoc signieren, sonst blockt macOS die umgeschriebenen Libs
           codesign --force --deep --sign - "$APP" || true
