@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Rechnungen{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Rechnungen</h1>
+  {% if chain_issues %}
+    <p class="err"><strong>Achtung:</strong> Hash-Ketten-Pruefung fehlgeschlagen:
+      <ul>{% for i in chain_issues %}<li>{{ i.invoice }}: {{ i.problem }}</li>{% endfor %}</ul>
+    </p>
+  {% else %}
+    <p class="ok">&#10003; Hash-Kette ist konsistent - keine nachtraeglichen Aenderungen erkannt.</p>
+  {% endif %}
+
+  <p><a class="btn" href="/neu">+ Neue Rechnung</a></p>
+
+  {% if invoices %}
+  <table>
+    <thead><tr>
+      <th>Nummer</th><th>Datum</th><th>Empfaenger</th>
+      <th class="right">Netto</th><th class="right">Brutto</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for inv in invoices %}
+      <tr>
+        <td>{{ inv.invoice_number }}</td>
+        <td>{{ inv.issue_date.strftime('%d.%m.%Y') }}</td>
+        <td>{{ inv.buyer_name }}</td>
+        <td class="right">{{ '%.2f'|format(inv.net_total) }} {{ inv.currency }}</td>
+        <td class="right">{{ '%.2f'|format(inv.gross_total) }} {{ inv.currency }}</td>
+        <td>
+          <a href="/rechnung/{{ inv.id }}">Details</a> ·
+          <a href="/rechnung/{{ inv.id }}/pdf">PDF</a> ·
+          <a href="/rechnung/{{ inv.id }}/xml">XML</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted">Noch keine Rechnungen. Lege oben eine neue an.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Neue Rechnung{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Neue Rechnung</h1>
+  <p class="muted">Erzeugt automatisch das PDF mit eingebettetem ZUGFeRD-XML (E-Rechnung nach EN 16931).</p>
+
+  <form method="post" action="/neu" id="form">
+    <div class="grid">
+      <div><label>Rechnungsnummer *</label><input name="invoice_number" required></div>
+      <div><label>Rechnungsdatum *</label><input type="date" name="issue_date" required></div>
+      <div><label>Leistungsdatum *</label><input type="date" name="delivery_date" required></div>
+      <div><label>Faellig am *</label><input type="date" name="due_date" required></div>
+    </div>
+
+    <h3>Rechnungsempfaenger</h3>
+    <div class="grid">
+      <div><label>Firma / Name *</label><input name="buyer_name" required></div>
+      <div><label>Strasse + Nr *</label><input name="buyer_street" required></div>
+      <div><label>PLZ *</label><input name="buyer_postcode" required></div>
+      <div><label>Ort *</label><input name="buyer_city" required></div>
+      <div><label>Land</label><input name="buyer_country" value="DE" maxlength="2"></div>
+      <div><label>USt-IdNr. (optional)</label><input name="buyer_tax_id"></div>
+      <div><label>E-Mail (optional)</label><input name="buyer_email" type="email"></div>
+      <div><label>Leitweg-ID / Referenz (B2G)</label><input name="buyer_reference"></div>
+    </div>
+
+    <h3>Positionen</h3>
+    <div id="items">
+      <div class="grid-3" data-row="1">
+        <div><label>Beschreibung *</label><input name="desc_1" required></div>
+        <div><label>Menge</label><input name="qty_1" value="1" type="number" step="0.001"></div>
+        <div><label>Einheit</label>
+          <select name="unit_1">
+            <option value="C62">Stueck</option>
+            <option value="HUR">Stunde</option>
+            <option value="DAY">Tag</option>
+            <option value="MTR">Meter</option>
+            <option value="KGM">kg</option>
+            <option value="LTR">Liter</option>
+            <option value="XPP">Pauschal</option>
+          </select>
+        </div>
+        <div><label>Einzelpreis (netto)</label><input name="price_1" value="0" type="number" step="0.0001"></div>
+        <div><label>USt-%</label>
+          <select name="tax_1">
+            <option value="19">19 %</option>
+            <option value="7">7 %</option>
+            <option value="0">0 %</option>
+          </select>
+        </div>
+        <div><button type="button" class="btn btn-secondary" onclick="removeRow(this)">&minus;</button></div>
+      </div>
+    </div>
+    <p><button type="button" class="btn btn-secondary" onclick="addRow()">+ Position hinzufuegen</button></p>
+
+    <h3>Weitere Angaben</h3>
+    <div><label>Zahlungsbedingungen</label>
+      <input name="payment_terms" value="Zahlbar innerhalb von 14 Tagen ohne Abzug."></div>
+    <div><label>Anmerkungen / Freitext auf der Rechnung</label>
+      <textarea name="notes" rows="3"></textarea></div>
+
+    <p style="margin-top:20px"><button class="btn" type="submit">Rechnung erzeugen</button></p>
+  </form>
+</div>
+
+<script>
+let n = 1;
+function addRow() {
+  n += 1;
+  const html = `
+    <div class="grid-3" data-row="${n}">
+      <div><label>Beschreibung *</label><input name="desc_${n}" required></div>
+      <div><label>Menge</label><input name="qty_${n}" value="1" type="number" step="0.001"></div>
+      <div><label>Einheit</label>
+        <select name="unit_${n}">
+          <option value="C62">Stueck</option><option value="HUR">Stunde</option>
+          <option value="DAY">Tag</option><option value="MTR">Meter</option>
+          <option value="KGM">kg</option><option value="LTR">Liter</option>
+          <option value="XPP">Pauschal</option>
+        </select>
+      </div>
+      <div><label>Einzelpreis</label><input name="price_${n}" value="0" type="number" step="0.0001"></div>
+      <div><label>USt-%</label>
+        <select name="tax_${n}"><option value="19">19 %</option><option value="7">7 %</option><option value="0">0 %</option></select>
+      </div>
+      <div><button type="button" class="btn btn-secondary" onclick="removeRow(this)">&minus;</button></div>
+    </div>`;
+  document.getElementById("items").insertAdjacentHTML("beforeend", html);
+}
+function removeRow(btn) {
+  const row = btn.closest("[data-row]");
+  if (document.querySelectorAll("#items [data-row]").length > 1) row.remove();
+}
+// Heutedatum als Default
+const today = new Date().toISOString().slice(0,10);
+document.querySelector('[name=issue_date]').value = today;
+document.querySelector('[name=delivery_date]').value = today;
+const due = new Date(Date.now()+14*86400000).toISOString().slice(0,10);
+document.querySelector('[name=due_date]').value = due;
+</script>
+{% endblock %}

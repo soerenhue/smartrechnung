@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Einstellungen</h1>
+  <p class="muted">Diese Einstellungen gelten nur fuer diese Installation. Sie werden in
+     <code>data/branding.json</code> gespeichert.</p>
+
+  <form method="post" action="/einstellungen" enctype="multipart/form-data">
+    <h3>Rechnungsvorlage</h3>
+    <p class="muted">Die Vorlagen liegen in <code>data/templates/</code>. Du kannst sie frei bearbeiten
+       oder eine eigene daneben legen (z. B. <code>onkel.html</code>) und hier auswaehlen.</p>
+    <div><label>Aktive Vorlage</label>
+      <select name="template">
+        {% for t in templates %}
+          <option value="{{ t }}" {% if t == branding.template %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select></div>
+
+    <h3>Farben & Schrift</h3>
+    <div class="grid">
+      <div><label>Primaerfarbe</label><input name="primary_color" type="color" value="{{ branding.primary_color }}"></div>
+      <div><label>Akzentfarbe</label><input name="accent_color" type="color" value="{{ branding.accent_color }}"></div>
+      <div><label>Textfarbe</label><input name="text_color" type="color" value="{{ branding.text_color }}"></div>
+      <div><label>Dezente Farbe (Linien, Hinweise)</label><input name="muted_color" type="color" value="{{ branding.muted_color }}"></div>
+      <div style="grid-column:1/-1"><label>Schriftfamilie (CSS)</label>
+        <input name="font_family" value="{{ branding.font_family }}"></div>
+    </div>
+
+    <h3>Logo</h3>
+    <div class="grid">
+      <div><label>Aktuelles Logo</label>
+        {% if branding.logo_filename %}
+          <img src="/branding/{{ branding.logo_filename }}" style="max-height:60px;background:#fff;padding:4px;border:1px solid #ddd">
+          <p class="muted">{{ branding.logo_filename }}</p>
+        {% else %}
+          <p class="muted">Kein Logo hinterlegt.</p>
+        {% endif %}
+      </div>
+      <div><label>Neues Logo hochladen (PNG/JPG/SVG)</label>
+        <input type="file" name="logo" accept="image/*"></div>
+    </div>
+
+    <h3>Fusszeilen (3 Zeilen fuer Impressum/Bank)</h3>
+    <div><label>Zeile 1</label><input name="footer_line_1" value="{{ branding.footer_line_1 }}"></div>
+    <div><label>Zeile 2</label><input name="footer_line_2" value="{{ branding.footer_line_2 }}"></div>
+    <div><label>Zeile 3</label><input name="footer_line_3" value="{{ branding.footer_line_3 }}"></div>
+
+    <h3>Firmendaten (nicht hier - kommen aus der Container-Konfiguration)</h3>
+    <p class="muted">Die Firmendaten (Name, Adresse, USt-IdNr., IBAN, ...) stehen in der
+       <code>docker-compose.yml</code> unter <code>environment</code> und gelten pro Installation.
+       Aktuell: <strong>{{ seller.seller_name }}</strong>, USt-IdNr <code>{{ seller.seller_tax_id }}</code>, IBAN <code>{{ seller.seller_iban }}</code>.</p>
+
+    <p style="margin-top:20px"><button class="btn" type="submit">Speichern</button></p>
+  </form>
+</div>
+{% endblock %}

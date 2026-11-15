@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Rechnung {{ inv.invoice_number }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Rechnung {{ inv.invoice_number }}</h1>
+  <p class="muted">Erzeugt am {{ inv.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</p>
+
+  <p><strong>Empfaenger:</strong> {{ inv.buyer_name }}, {{ inv.buyer_street }}, {{ inv.buyer_postcode }} {{ inv.buyer_city }}</p>
+  <p><strong>Rechnungsdatum:</strong> {{ inv.issue_date.strftime('%d.%m.%Y') }} ·
+     <strong>Leistungsdatum:</strong> {{ inv.delivery_date.strftime('%d.%m.%Y') }} ·
+     <strong>Faellig:</strong> {{ inv.due_date.strftime('%d.%m.%Y') }}</p>
+
+  <table>
+    <thead><tr>
+      <th>#</th><th>Beschreibung</th><th class="right">Menge</th><th class="right">Einzelpreis</th>
+      <th class="right">USt%</th><th class="right">Nettobetrag</th>
+    </tr></thead>
+    <tbody>
+    {% for it in inv.items %}
+      <tr>
+        <td>{{ it.position }}</td>
+        <td>{{ it.description }}</td>
+        <td class="right">{{ '%.3f'|format(it.quantity) }}</td>
+        <td class="right">{{ '%.4f'|format(it.unit_price) }} {{ inv.currency }}</td>
+        <td class="right">{{ '%.2f'|format(it.tax_rate) }}</td>
+        <td class="right">{{ '%.2f'|format(it.net_amount) }} {{ inv.currency }}</td>
+      </tr>
+    {% endfor %}
+      <tr class="sum-row"><td colspan="5" class="right">Netto</td><td class="right">{{ '%.2f'|format(inv.net_total) }} {{ inv.currency }}</td></tr>
+      <tr class="sum-row"><td colspan="5" class="right">Umsatzsteuer</td><td class="right">{{ '%.2f'|format(inv.tax_total) }} {{ inv.currency }}</td></tr>
+      <tr class="total-row"><td colspan="5" class="right">Gesamt brutto</td><td class="right">{{ '%.2f'|format(inv.gross_total) }} {{ inv.currency }}</td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:20px">
+    <a class="btn" href="/rechnung/{{ inv.id }}/pdf">PDF (ZUGFeRD) herunterladen</a>
+    <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}/xml">XML separat</a>
+  </p>
+
+  <details style="margin-top:16px">
+    <summary class="muted">Audit-Daten (GoBD)</summary>
+    <pre style="font-size:0.8rem">
+content_hash: {{ inv.content_hash }}
+prev_hash   : {{ inv.prev_hash or '(erste Rechnung)' }}
+chain_hash  : {{ inv.chain_hash }}
+pdf_path    : {{ inv.pdf_path }}
+xml_path    : {{ inv.xml_path }}
+    </pre>
+  </details>
+</div>
+{% endblock %}
