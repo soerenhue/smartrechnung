@@ -3,14 +3,6 @@
 {% block content %}
 <div class="card">
   <h1>Rechnungen</h1>
-  {% if chain_issues %}
-    <p class="err"><strong>Achtung:</strong> Hash-Ketten-Prüfung fehlgeschlagen:
-      <ul>{% for i in chain_issues %}<li>{{ i.invoice }}: {{ i.problem }}</li>{% endfor %}</ul>
-    </p>
-  {% else %}
-    <p class="ok">&#10003; Hash-Kette ist konsistent - keine nachtraeglichen Änderungen erkannt.</p>
-  {% endif %}
-
   <p><a class="btn" href="/neu">+ Neue Rechnung</a></p>
 
   {% if not invoices %}
@@ -30,7 +22,7 @@
   {% if invoices %}
   <table>
     <thead><tr>
-      <th>Nummer</th><th>Datum</th><th>Empfaenger</th>
+      <th>Nummer</th><th>Datum</th><th>Empfänger</th>
       <th class="right">Netto</th><th class="right">Brutto</th><th></th>
     </tr></thead>
     <tbody>
