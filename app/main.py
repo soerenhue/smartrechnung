@@ -495,7 +495,12 @@ def invoice_pdf(inv_id: int, db: Session = Depends(get_db)):
     if not inv or not inv.pdf_path:
         raise HTTPException(404)
     full = Path(_cfg.data_dir) / inv.pdf_path
-    return FileResponse(full, media_type="application/pdf", filename=full.name)
+    return FileResponse(
+        full,
+        media_type="application/pdf",
+        filename=full.name,
+        headers={"Content-Disposition": f'attachment; filename="{full.name}"'},
+    )
 
 
 @app.get("/rechnung/{inv_id}/xml")
@@ -504,7 +509,14 @@ def invoice_xml(inv_id: int, db: Session = Depends(get_db)):
     if not inv or not inv.xml_path:
         raise HTTPException(404)
     full = Path(_cfg.data_dir) / inv.xml_path
-    return FileResponse(full, media_type="application/xml", filename=full.name)
+    # Content-Disposition: attachment erzwingt Download statt
+    # Anzeige im Browser-Fenster
+    return FileResponse(
+        full,
+        media_type="application/xml",
+        filename=full.name,
+        headers={"Content-Disposition": f'attachment; filename="{full.name}"'},
+    )
 
 
 # --- GoBD-Export (pro Firma) ---------------------------------------------

@@ -89,6 +89,19 @@ def _find_free_port(preferred: int = 8765) -> int:
         return s.getsockname()[1]
 
 
+def _already_running(port: int = 8765) -> bool:
+    """Prüft, ob auf dem Standard-Port schon eine SmartRechnung-Instanz
+    läuft. Wenn ja -> unsere App ist schon offen, einfach den Browser
+    aufmachen statt eine zweite Instanz zu starten."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1) as r:
+            body = r.read(512).decode("utf-8", errors="ignore")
+            return "SmartRechnung" in body
+    except Exception:
+        return False
+
+
 def _wait_for_server(port: int, timeout: float = 30.0) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -131,6 +144,13 @@ def main() -> int:
     log(f"PLAYWRIGHT_BROWSERS_PATH = {os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '(nicht gesetzt)')}")
 
     try:
+        # Single-Instance-Check: Wenn SmartRechnung schon läuft, einfach
+        # den Browser auf die bestehende Instanz richten und beenden
+        if _already_running(8765):
+            log("SmartRechnung läuft bereits - öffne bestehendes Fenster")
+            webbrowser.open("http://127.0.0.1:8765/")
+            return 0
+
         port = _find_free_port()
         log(f"Freier Port: {port}")
         url = f"http://127.0.0.1:{port}/"

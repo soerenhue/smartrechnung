@@ -1,12 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Rechnung {{ inv.invoice_number }}{% endblock %}
 {% block content %}
+<p><a href="/" style="color:#4F46E5;text-decoration:none">&larr; Zurück zur Rechnungsliste</a></p>
+
 <div style="background:#ecfdf5; border:1px solid #10b981; border-radius:10px; padding: 20px; margin-bottom: 16px; text-align:center">
   <div style="font-size: 2rem">✅</div>
-  <h2 style="margin: 6px 0">Deine E-Rechnung ist fertig</h2>
-  <p class="muted" style="margin: 4px 0 16px">Du kannst sie jetzt deinem Kunden per E-Mail schicken.</p>
+  <h2 style="margin: 6px 0">Deine Rechnung ist fertig</h2>
+  <p class="muted" style="margin: 4px 0 16px">
+    Die PDF ist gleichzeitig eine <strong>E-Rechnung</strong> — sie enthält alle Daten
+    auch als Maschinen-Format (ZUGFeRD-XML) darin eingebettet. Du kannst sie
+    einfach per E-Mail an deinen Kunden schicken; Buchhaltungsprogramme
+    erkennen die Daten automatisch.
+  </p>
   <a class="btn" href="/rechnung/{{ inv.id }}/pdf" style="padding:14px 28px; font-size:1.05rem">
-    ⬇ Rechnung (PDF) herunterladen
+    ⬇ Rechnung herunterladen
   </a>
   <a class="btn btn-secondary" href="/neu">Nächste Rechnung schreiben</a>
 </div>
@@ -43,8 +50,15 @@
   </table>
 
   <p style="margin-top:20px">
-    <a class="btn" href="/rechnung/{{ inv.id }}/pdf">PDF (ZUGFeRD) herunterladen</a>
-    <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}/xml">XML separat</a>
+    <a class="btn" href="/rechnung/{{ inv.id }}/pdf">Rechnung herunterladen</a>
+    <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}/xml" download>
+      Nur das XML (für technisch Interessierte)
+    </a>
+  </p>
+  <p class="muted" style="font-size:0.85rem;margin-top:6px">
+    Das XML ist schon <em>in</em> der PDF-Datei eingebettet — du musst es normalerweise
+    nicht separat herunterladen. Dein Kunde bekommt also nur die PDF und hat damit
+    bereits alles.
   </p>
 
   <details style="margin-top:16px">
