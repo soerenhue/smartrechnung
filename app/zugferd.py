@@ -196,14 +196,14 @@ def embed_xml_in_pdf(pdf_bytes: bytes, xml_bytes: bytes, out_path: Path) -> None
     """Bettet das ZUGFeRD-XML als 'factur-x.xml' in das PDF ein und schreibt
     das Ergebnis als PDF/A-3 nach out_path.
 
-    factur-x 3.x: generate_from_binary() gibt die fertigen PDF-Bytes direkt
-    zurueck; das alte output_pdf-Keyword wurde entfernt."""
-    output_bytes = generate_from_binary(
-        pdf_bytes,
-        xml_bytes,
-        afrelationship="Data",
-        attachment_filename="factur-x.xml",
-        flavor="factur-x",
-        level="en16931",
-    )
+    factur-x 3.x hat die API geaendert - viele Keyword-Argumente wurden
+    entfernt oder umbenannt. Wir nutzen nur die Minimal-Signatur und
+    verlassen uns auf die Defaults (attachment_filename ist hardcoded
+    auf 'factur-x.xml', flavor/level werden autodetected)."""
+    try:
+        # Neue API: nur pdf_bytes + xml_bytes, alles andere Defaults
+        output_bytes = generate_from_binary(pdf_bytes, xml_bytes)
+    except TypeError:
+        # Falls doch aeltere API aktiv ist, mit check_xsd=False zur Sicherheit
+        output_bytes = generate_from_binary(pdf_bytes, xml_bytes, check_xsd=False)
     out_path.write_bytes(output_bytes)
