@@ -22,6 +22,8 @@ from .config import (
     COMPANIES_DIR, Company, create_company, delete_company,
     get_company, list_companies, settings as _cfg,
 )
+from .pdf_analyzer import analyze_pdf, save_logo
+from .template_generator import generate_template
 from .db import Base, engine, get_db
 from .models import Invoice
 from .schemas import InvoiceIn, InvoiceItemIn
@@ -228,6 +230,64 @@ async def company_edit_save(slug: str, request: Request):
         save_branding(c, current)
 
     return RedirectResponse(f"/firmen/{slug}", status_code=303)
+
+
+@app.get("/firmen/{slug}/vorlage-aus-pdf")
+def template_wizard(slug: str, request: Request):
+    c = get_company(slug)
+    if not c:
+        raise HTTPException(404)
+    return _render(request, "template_wizard.html",
+                   {"company": c, "layout": None, "saved": False})
+
+
+@app.post("/firmen/{slug}/vorlage-aus-pdf")
+async def template_wizard_save(slug: str, request: Request):
+    c = get_company(slug)
+    if not c:
+        raise HTTPException(404)
+    form = await request.form()
+    upload = form.get("pdf_file")
+    if not hasattr(upload, "filename") or not upload.filename:
+        return _err_page(request, "Keine PDF-Datei gewaehlt",
+                         "Bitte lade eine PDF-Rechnung hoch, aus der die Vorlage gebaut werden soll.", 400)
+    pdf_bytes = await upload.read()
+    if not pdf_bytes.startswith(b"%PDF"):
+        return _err_page(request, "Keine gueltige PDF",
+                         "Die Datei konnte nicht als PDF gelesen werden.", 400)
+
+    try:
+        layout = analyze_pdf(pdf_bytes)
+    except Exception as e:
+        return _err_page(request, "PDF-Analyse fehlgeschlagen",
+                         f"Konnte das Layout nicht ermitteln: {e}", 400)
+
+    # Logo speichern (falls erkannt)
+    logo_filename = save_logo(layout, c.assets_dir, name_stem="logo-imported")
+
+    # HTML-Vorlage erzeugen
+    html = generate_template(layout)
+    template_name = form.get("template_name") or "importiert.html"
+    if not template_name.endswith(".html"):
+        template_name += ".html"
+    # Sicherheit: nur Dateinamen, keine Pfade
+    template_name = Path(template_name).name
+    (c.templates_dir / template_name).write_text(html, encoding="utf-8")
+
+    # Branding aktualisieren: neue Vorlage aktiv + Farben uebernehmen
+    br = load_branding(c)
+    br["template"] = template_name
+    br["primary_color"] = layout.primary_color
+    br["accent_color"] = layout.accent_color
+    br["text_color"] = layout.text_color
+    br["font_family"] = f'"{layout.font_family}", DejaVu Sans, sans-serif'
+    if logo_filename:
+        br["logo_filename"] = logo_filename
+    save_branding(c, br)
+
+    return _render(request, "template_wizard.html",
+                   {"company": c, "layout": layout, "saved": True,
+                    "template_name": template_name})
 
 
 @app.post("/firmen/{slug}/loeschen")

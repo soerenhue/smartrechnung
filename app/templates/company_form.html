@@ -91,8 +91,16 @@
   </div>
 
 {% if company %}
+  <div class="card" style="background:#f0f9ff;border-color:#60a5fa">
+    <h2 style="margin-top:0">5. Rechnungsvorlage aus bestehender PDF importieren</h2>
+    <p class="muted">Du hast schon eine Rechnung in deinem Wunsch-Layout? Lade sie als PDF hoch -
+       die App extrahiert Logo, Farben und Layout automatisch und baut daraus eine Vorlage.
+       Danach sehen alle neuen Rechnungen wie deine alte aus.</p>
+    <p><a class="btn" href="/firmen/{{ company.slug }}/vorlage-aus-pdf">PDF-Rechnung hochladen und Vorlage erstellen</a></p>
+  </div>
+
   <div class="card">
-    <h2 style="margin-top:0">5. Rechnungs-Design</h2>
+    <h2 style="margin-top:0">6. Rechnungs-Design (manuell)</h2>
     <div class="grid">
       <div><label>Aktive Vorlage</label>
         <select name="template">
