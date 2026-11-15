@@ -22,7 +22,7 @@ from .config import (
     COMPANIES_DIR, Company, create_company, delete_company,
     get_company, list_companies, settings as _cfg,
 )
-from .pdf_analyzer import analyze_pdf, save_logo
+from .pdf_analyzer import analyze_pdf, save_background, save_logo
 from .template_generator import generate_template
 from .db import Base, engine, get_db
 from .models import Customer, Invoice
@@ -281,10 +281,12 @@ async def template_wizard_save(slug: str, request: Request):
         return _err_page(request, "PDF-Analyse fehlgeschlagen",
                          f"Konnte das Layout nicht ermitteln: {e}", 400)
 
-    # Logo speichern (falls erkannt)
+    # Logo + 300-DPI-Hintergrundbild der Originalvorlage speichern
     logo_filename = save_logo(layout, c.assets_dir, name_stem="logo-imported")
+    save_background(layout, c.assets_dir, name_stem="vorlage-hintergrund")
 
-    # HTML-Vorlage frisch generieren (keine Bildkopie - alles scharfer Text)
+    # Overlay-Vorlage: Original als Hintergrund + weiße Boxen + scharfer
+    # neuer Text an den erkannten Positionen
     html = generate_template(layout)
     template_name = form.get("template_name") or "importiert.html"
     if not template_name.endswith(".html"):

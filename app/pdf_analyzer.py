@@ -1,12 +1,13 @@
-"""Analysiert eine hochgeladene PDF-Rechnung und extrahiert Layout-Infos
-für die neue HTML-Vorlage. Wird NICHT als Bild übernommen (bleibt scharf
-bei jeder Druckauflösung), sondern sauber nachgebaut.
+"""Analysiert eine hochgeladene PDF-Rechnung und extrahiert:
 
-Extrahiert:
-  - Logo (größtes Bild im oberen Drittel) → wird ins Branding übernommen
-  - Dominante Farben (Primär + Akzent)
-  - Häufigste Schriftart + Größen
-  - Grobe Positionen (Empfänger-Block, Positionen-Tabelle)
+1. Ein hochauflösendes Bild der ersten Seite (als Hintergrund für die neue
+   Rechnungsvorlage - bei 300 DPI Druckqualität, nicht pixelig).
+2. Die Positionen der Rechnungsfelder im Original (Empfänger-Block,
+   Rechnungsnummer, Datum, Positionen-Tabelle, Summen) - damit die neuen
+   Daten exakt dort platziert werden können, wo im Original die alten
+   stehen (die mit weißen Overlays überdeckt werden).
+
+Resultat: 1:1-Nachbildung des Originals mit scharfem neuen Text.
 """
 
 from __future__ import annotations
@@ -22,31 +23,43 @@ import fitz  # PyMuPDF
 
 
 @dataclass
+class FieldBox:
+    """Ein erkanntes Rechnungsfeld - Position in Prozent der Seitenbreite/-höhe."""
+    x_pct: float = 0.0
+    y_pct: float = 0.0
+    width_pct: float = 0.0
+    height_pct: float = 0.0
+    sample_text: str = ""
+
+
+@dataclass
 class ExtractedLayout:
-    page_width: float = 595.0   # A4 in pt
-    page_height: float = 842.0
+    page_width_pt: float = 595.0
+    page_height_pt: float = 842.0
     primary_color: str = "#1e3a8a"
     accent_color: str = "#3b82f6"
     text_color: str = "#111827"
     font_family: str = "DejaVu Sans"
     font_class: str = "sans"
-    logo_bytes: Optional[bytes] = None
-    logo_ext: str = "png"
     base_font_size: float = 10.0
     heading_font_size: float = 20.0
-    logo_x_pct: float = 70.0
-    logo_y_pct: float = 3.0
-    logo_width_pct: float = 25.0
-    buyer_y_pct: float = 25.0
-    items_y_pct: float = 45.0
+
+    logo_bytes: Optional[bytes] = None
+    logo_ext: str = "png"
+
+    # Hintergrundbild des Originals (300 DPI, PNG)
+    background_png: Optional[bytes] = None
+
+    # Erkannte Positionen der Rechnungsfelder im Original
+    buyer_box: Optional[FieldBox] = None
+    meta_box: Optional[FieldBox] = None        # Rechnungsnummer + Datum
+    items_box: Optional[FieldBox] = None       # Positionstabelle
+    totals_box: Optional[FieldBox] = None      # Summenblock
+    payment_box: Optional[FieldBox] = None     # Zahlungsbedingungen / IBAN
+
     detected_fonts: list[str] = field(default_factory=list)
-    detected_colors: list[str] = field(default_factory=list)
-    table_column_xs: list[float] = field(default_factory=list)
 
 
-# Bekannte Fonts auf stilistische Klassen abgebildet. Fontconfig und WeasyPrint
-# ersetzen bei nicht gefundener Font eine stilistisch passende aus derselben
-# Klasse (statt eine wahllos andere).
 _SERIF_FONTS = {"times", "georgia", "garamond", "cambria", "palatino",
                 "baskerville", "didot", "bodoni", "minion", "caslon",
                 "charter", "merriweather", "playfair", "lora", "crimson",
@@ -68,76 +81,98 @@ def _classify_font(name: str) -> str:
 
 def _rgb_to_hex(r: float, g: float, b: float) -> str:
     return "#{:02x}{:02x}{:02x}".format(
-        int(round(r * 255)), int(round(g * 255)), int(round(b * 255))
-    )
+        int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
 
 
-def _is_near_white(hex_: str) -> bool:
-    r = int(hex_[1:3], 16); g = int(hex_[3:5], 16); b = int(hex_[5:7], 16)
+def _is_near_white(h: str) -> bool:
+    r = int(h[1:3], 16); g = int(h[3:5], 16); b = int(h[5:7], 16)
     return r > 240 and g > 240 and b > 240
 
 
-def _is_near_black(hex_: str) -> bool:
-    r = int(hex_[1:3], 16); g = int(hex_[3:5], 16); b = int(hex_[5:7], 16)
+def _is_near_black(h: str) -> bool:
+    r = int(h[1:3], 16); g = int(h[3:5], 16); b = int(h[5:7], 16)
     return r < 40 and g < 40 and b < 40
 
 
-def _colorfulness(hex_: str) -> float:
-    """Hoeher = bunter. Weiss/Schwarz/Grau nahe 0."""
-    r = int(hex_[1:3], 16); g = int(hex_[3:5], 16); b = int(hex_[5:7], 16)
+def _colorfulness(h: str) -> float:
+    r = int(h[1:3], 16); g = int(h[3:5], 16); b = int(h[5:7], 16)
     return max(r, g, b) - min(r, g, b)
 
 
+def _union_bbox(blocks: list[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
+    """Vereint mehrere Bounding-Boxen zu einer."""
+    if not blocks:
+        return (0, 0, 0, 0)
+    x0 = min(b[0] for b in blocks)
+    y0 = min(b[1] for b in blocks)
+    x1 = max(b[2] for b in blocks)
+    y1 = max(b[3] for b in blocks)
+    return (x0, y0, x1, y1)
+
+
+def _to_pct(bbox, page_w, page_h) -> FieldBox:
+    x0, y0, x1, y1 = bbox
+    return FieldBox(
+        x_pct=(x0 / page_w) * 100,
+        y_pct=(y0 / page_h) * 100,
+        width_pct=((x1 - x0) / page_w) * 100,
+        height_pct=((y1 - y0) / page_h) * 100,
+    )
+
+
 def analyze_pdf(pdf_bytes: bytes) -> ExtractedLayout:
-    """Analysiert ein PDF und gibt ExtractedLayout zurück."""
+    """Analysiert ein PDF, rendert den Hintergrund und erkennt Feld-Positionen."""
     layout = ExtractedLayout()
+
     with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         if not doc.page_count:
             return layout
+
         page = doc[0]
-        layout.page_width = page.rect.width
-        layout.page_height = page.rect.height
+        page_w = layout.page_width_pt = page.rect.width
+        page_h = layout.page_height_pt = page.rect.height
 
-        # --- Bilder (fuer Logo) ---
-        images = page.get_images(full=True)
-        best_logo = None   # (area, xref, bbox)
-        for img in images:
-            xref = img[0]
-            try:
-                info = page.get_image_bbox(img)
-                if info is None or info.is_empty:
+        # --- Hintergrundbild: 300 DPI (Druckqualität) ---
+        try:
+            zoom = 300 / 72
+            mat = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            layout.background_png = pix.tobytes("png")
+        except Exception:
+            pass
+
+        # --- Logo: größtes Bild im oberen Drittel ---
+        try:
+            images = page.get_images(full=True)
+            best = None
+            for img in images:
+                xref = img[0]
+                try:
+                    bbox = page.get_image_bbox(img)
+                    if bbox is None or bbox.is_empty:
+                        continue
+                except Exception:
                     continue
-                bbox = info
-            except Exception:
-                continue
-            area = bbox.width * bbox.height
-            # Nur im oberen Drittel und nicht winzig
-            if bbox.y0 < layout.page_height * 0.35 and area > 400:
-                if best_logo is None or area > best_logo[0]:
-                    best_logo = (area, xref, bbox)
-
-        if best_logo is not None:
-            _, xref, bbox = best_logo
-            try:
+                area = bbox.width * bbox.height
+                if bbox.y0 < page_h * 0.35 and area > 400:
+                    if best is None or area > best[0]:
+                        best = (area, xref, bbox)
+            if best:
+                _, xref, _ = best
                 extracted = doc.extract_image(xref)
                 layout.logo_bytes = extracted["image"]
                 layout.logo_ext = extracted.get("ext", "png")
-                # Position relativ
-                layout.logo_x_pct = (bbox.x0 / layout.page_width) * 100
-                layout.logo_y_pct = (bbox.y0 / layout.page_height) * 100
-                layout.logo_width_pct = (bbox.width / layout.page_width) * 100
-            except Exception:
-                pass
+        except Exception:
+            pass
 
-        # --- Textbloecke, Farben, Schriften ---
+        # --- Textblöcke mit Position einsammeln ---
         text_dict = page.get_text("dict")
         font_counter: Counter[str] = Counter()
         color_counter: Counter[str] = Counter()
         size_counter: Counter[float] = Counter()
-        text_xs: list[float] = []
-        heading_candidates: list[tuple[float, str]] = []  # (size, text)
-        buyer_block_y = None
-        items_block_y = None
+
+        # Alle Textspans mit Position
+        spans = []  # (bbox, text, size, color_hex, font)
 
         for block in text_dict.get("blocks", []):
             if block.get("type") != 0:
@@ -149,7 +184,7 @@ def analyze_pdf(pdf_bytes: bytes) -> ExtractedLayout:
                         continue
                     size = float(span.get("size", 10))
                     font = span.get("font", "").strip()
-                    color = int(span.get("color", 0))  # 0xRRGGBB als int
+                    color = int(span.get("color", 0))
                     r = ((color >> 16) & 0xFF) / 255.0
                     g = ((color >> 8) & 0xFF) / 255.0
                     b = (color & 0xFF) / 255.0
@@ -157,77 +192,103 @@ def analyze_pdf(pdf_bytes: bytes) -> ExtractedLayout:
                     font_counter[font] += 1
                     color_counter[hex_] += 1
                     size_counter[size] += 1
-                    text_xs.append(span.get("bbox", [0])[0])
+                    bbox = tuple(span.get("bbox", [0, 0, 0, 0]))
+                    spans.append((bbox, text, size, hex_, font))
 
-                    # Ueberschriften: deutlich groesser als Durchschnitt
-                    if size >= 16:
-                        heading_candidates.append((size, text))
-
-                    # Buyer-Block grob erkennen: enthaelt PLZ-Pattern oder "An"
-                    if re.search(r"\b\d{5}\b", text) and buyer_block_y is None:
-                        y0 = span.get("bbox", [0, 0, 0, 0])[1]
-                        if y0 > layout.page_height * 0.15 and y0 < layout.page_height * 0.5:
-                            buyer_block_y = y0
-
-                    # Rechnungspositionen: Woerter wie "Menge", "Beschreibung", "Netto"
-                    if re.search(r"(Menge|Beschreibung|Pos\b|Netto|Einzelpreis|USt)", text, re.I):
-                        y0 = span.get("bbox", [0, 0, 0, 0])[1]
-                        if items_block_y is None:
-                            items_block_y = y0
-
-        # Dominante Farbe = farbigste, nicht schwarz, nicht weiss
-        detected_colors = [
-            h for h, _ in color_counter.most_common()
-            if not _is_near_white(h) and not _is_near_black(h)
-        ]
-        colorful = sorted(detected_colors, key=_colorfulness, reverse=True)
+        # --- Farben ---
+        colorful = sorted(
+            [h for h, _ in color_counter.most_common()
+             if not _is_near_white(h) and not _is_near_black(h)],
+            key=_colorfulness, reverse=True)
         if colorful:
             layout.primary_color = colorful[0]
-            if len(colorful) > 1:
-                layout.accent_color = colorful[1]
-            else:
-                layout.accent_color = colorful[0]
-        # Schwarz/dunkelste Text-Farbe
+            layout.accent_color = colorful[1] if len(colorful) > 1 else colorful[0]
         dark = [h for h in color_counter if _is_near_black(h)]
         if dark:
             layout.text_color = dark[0]
 
-        # Schriftart: haeufigste
+        # --- Schriftart ---
         if font_counter:
             top_font = font_counter.most_common(1)[0][0]
-            # PDF-Font-Namen sehen oft aus wie "ABCDEF+Helvetica-Bold" - cleanen
             clean = re.sub(r"^[A-Z]{6}\+", "", top_font)
             clean = clean.split(",")[0].split("-")[0]
             layout.font_family = clean or "Helvetica"
             layout.font_class = _classify_font(clean)
             layout.detected_fonts = [f for f, _ in font_counter.most_common(5)]
 
-        # Groessen
+        # --- Schriftgrößen ---
         if size_counter:
             sizes = sorted(size_counter.keys())
-            layout.base_font_size = sizes[len(sizes) // 2]  # Median
+            layout.base_font_size = sizes[len(sizes) // 2]
+            heading_candidates = [s for s in size_counter if s >= 14]
             if heading_candidates:
-                layout.heading_font_size = max(s for s, _ in heading_candidates)
+                layout.heading_font_size = max(heading_candidates)
 
-        if buyer_block_y is not None:
-            layout.buyer_y_pct = (buyer_block_y / layout.page_height) * 100
-        if items_block_y is not None:
-            layout.items_y_pct = (items_block_y / layout.page_height) * 100
+        # --- Feld-Positionen erkennen ---
+        # Heuristik: typische Bereiche einer Rechnung
 
-        # Tabellen-Spalten: haeufigste X-Startpositionen von Textbloecken
-        # (grobe Heuristik - verbessert sich mit mehr Analyse)
-        if text_xs:
-            rounded = Counter(round(x / 10) * 10 for x in text_xs)
-            common_xs = sorted(x for x, _ in rounded.most_common(6))
-            layout.table_column_xs = common_xs
+        # 1. Empfängerblock: Y zwischen 20% und 42%, X in linker Hälfte
+        buyer_spans = [s for s in spans
+                       if page_h * 0.18 < s[0][1] < page_h * 0.45
+                       and s[0][0] < page_w * 0.55
+                       and (re.search(r"\b\d{5}\b", s[1]) or s[2] >= layout.base_font_size)]
+        if buyer_spans:
+            # Finde zusammenhängenden Block (nicht nur eine Zeile mit PLZ)
+            # Nimm den Block um die PLZ-Zeile herum
+            plz_spans = [s for s in buyer_spans if re.search(r"\b\d{5}\b", s[1])]
+            if plz_spans:
+                plz_y = plz_spans[0][0][1]
+                nearby = [s for s in buyer_spans
+                          if abs(s[0][1] - plz_y) < 50]
+                if nearby:
+                    bbox = _union_bbox([s[0] for s in nearby])
+                    layout.buyer_box = _to_pct(bbox, page_w, page_h)
 
-        layout.detected_colors = colorful[:5]
+        # 2. Meta-Block (Rechnungsnummer, Datum): Y 20-45%, rechte Seite
+        meta_spans = [s for s in spans
+                      if page_h * 0.15 < s[0][1] < page_h * 0.50
+                      and s[0][0] > page_w * 0.55
+                      and re.search(r"(Rechnung|Datum|Nummer|Nr\.|\d{2}[\.\/]\d{2}[\.\/]\d{2,4})", s[1], re.I)]
+        if meta_spans:
+            bbox = _union_bbox([s[0] for s in meta_spans])
+            layout.meta_box = _to_pct(bbox, page_w, page_h)
+
+        # 3. Positionstabelle: Y 42-75%, volle Breite
+        table_header_spans = [s for s in spans
+                              if re.search(r"(Beschreibung|Position|Menge|Einzelpreis|Netto|USt)", s[1], re.I)
+                              and page_h * 0.40 < s[0][1] < page_h * 0.80]
+        if table_header_spans:
+            header_y = min(s[0][1] for s in table_header_spans)
+            # Items-Bereich geht vom Header bis ~75% der Seite
+            layout.items_box = FieldBox(
+                x_pct=5.0,
+                y_pct=(header_y / page_h) * 100,
+                width_pct=90.0,
+                height_pct=max(20.0, 75.0 - (header_y / page_h) * 100),
+            )
+
+        # 4. Summen: nach Items, rechts
+        summary_spans = [s for s in spans
+                         if page_h * 0.65 < s[0][1] < page_h * 0.90
+                         and s[0][0] > page_w * 0.55
+                         and re.search(r"(Gesamt|Netto|Brutto|Summe|Umsatzsteuer|MwSt|\d+[,.]?\d+\s*(€|EUR))", s[1], re.I)]
+        if summary_spans:
+            bbox = _union_bbox([s[0] for s in summary_spans])
+            layout.totals_box = _to_pct(bbox, page_w, page_h)
+
+        # 5. Payment-Block (IBAN, Zahlungsbedingungen): unten
+        payment_spans = [s for s in spans
+                         if page_h * 0.75 < s[0][1] < page_h * 0.95
+                         and re.search(r"(IBAN|BIC|Zahlungs|Bankverbindung|Konto|\bDE\d{20})", s[1], re.I)]
+        if payment_spans:
+            bbox = _union_bbox([s[0] for s in payment_spans])
+            layout.payment_box = _to_pct(bbox, page_w, page_h)
 
     return layout
 
 
-def save_logo(layout: ExtractedLayout, target_dir: Path, name_stem: str = "logo-imported") -> Optional[str]:
-    """Speichert das extrahierte Logo. Gibt den Dateinamen zurück (oder None)."""
+def save_logo(layout: ExtractedLayout, target_dir: Path,
+              name_stem: str = "logo-imported") -> Optional[str]:
     if not layout.logo_bytes:
         return None
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -236,3 +297,12 @@ def save_logo(layout: ExtractedLayout, target_dir: Path, name_stem: str = "logo-
     return filename
 
 
+def save_background(layout: ExtractedLayout, target_dir: Path,
+                    name_stem: str = "vorlage-hintergrund") -> Optional[str]:
+    """Speichert das 300-DPI-Hintergrundbild der Originalvorlage."""
+    if not layout.background_png:
+        return None
+    target_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{name_stem}.png"
+    (target_dir / filename).write_bytes(layout.background_png)
+    return filename

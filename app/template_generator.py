@@ -1,210 +1,17 @@
-"""Erzeugt eine frische, sauber gerenderte Jinja2-HTML-Rechnungsvorlage aus
-einem ExtractedLayout. Keine Hintergrundbilder - alles echter, scharfer Text
-und Vektor-Linien, die bei jeder Auflösung gleich gut aussehen.
+"""Erzeugt eine 1:1-Overlay-Vorlage: Original-PDF als scharfer 300-DPI-
+Hintergrund, weiße Boxen überdecken die alten Rechnungsdaten, neue Daten
+werden als scharfer Vektortext an exakt den Positionen reingezeichnet.
 
-Übernommen aus dem Original:
-  - Primär- und Akzentfarbe
-  - Schriftart und -größe
-  - Logo (wird oben rechts eingesetzt)
-  - Fußzeile mit Bankverbindung
+Ergebnis: Sieht genau wie das Original aus (Logo, Rahmen, Farben, Fußzeile),
+aber mit den neuen aktuellen Daten als scharfer Text.
 """
 
 from __future__ import annotations
 
-from .pdf_analyzer import ExtractedLayout
-
-
-_TEMPLATE = r"""<!doctype html>
-<html lang="de">
-<head>
-<meta charset="utf-8">
-<title>Rechnung {{ inv.invoice_number }}</title>
-<style>
-  @page {
-    size: A4;
-    margin: 20mm 18mm 25mm 18mm;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0;
-               font-family: %FONT_FALLBACK%;
-               font-size: %BASE_SIZE%pt; color: %TEXT_COLOR%; }
-
-  .header { display: flex; justify-content: space-between; align-items: flex-start;
-            margin-bottom: 14mm; }
-  .header .seller { font-size: 9.5pt; line-height: 1.45; }
-  .header .seller .name { color: %PRIMARY_COLOR%; font-weight: 600;
-                          font-size: 11pt; margin-bottom: 1mm; }
-  .header .logo { max-width: 55mm; max-height: 25mm; }
-  .header .logo img { max-width: 100%; max-height: 25mm; object-fit: contain; }
-
-  .buyer-line { font-size: 7.5pt; color: %MUTED_COLOR%;
-                border-bottom: 0.2mm solid #d4d4d8;
-                padding-bottom: 1.5mm; margin-bottom: 3mm; }
-  .buyer { font-size: 10pt; line-height: 1.5; margin-bottom: 14mm; }
-  .buyer .name { font-weight: 600; }
-
-  h1 { color: %PRIMARY_COLOR%; font-size: %HEADING_SIZE%pt;
-       margin: 0 0 5mm 0; font-weight: 600; }
-
-  .meta { display: flex; justify-content: space-between;
-          padding: 3mm 0; margin-bottom: 5mm;
-          border-top: 0.3mm solid %PRIMARY_COLOR%;
-          border-bottom: 0.3mm solid %PRIMARY_COLOR%; }
-  .meta .block .label { color: %MUTED_COLOR%; font-size: 7.5pt;
-                        text-transform: uppercase; letter-spacing: 0.4pt;
-                        margin-bottom: 1mm; }
-  .meta .block .value { font-size: 10pt; }
-
-  table.items { width: 100%; border-collapse: collapse; margin-top: 2mm; }
-  table.items thead th { background: %PRIMARY_COLOR%; color: #fff;
-                         font-weight: 600; padding: 2.5mm 2.5mm;
-                         text-align: left; font-size: 9pt; }
-  table.items thead th.num { text-align: right; }
-  table.items tbody td { padding: 2.5mm; border-bottom: 0.15mm solid #e5e7eb;
-                         vertical-align: top; font-size: 9.5pt; }
-  table.items tbody td.num { text-align: right; white-space: nowrap; }
-
-  .totals { margin-top: 6mm; margin-left: auto; width: 68mm;
-            font-size: 10pt; }
-  .totals .row { display: flex; justify-content: space-between;
-                 padding: 1.2mm 0; }
-  .totals .row.grand { border-top: 0.6mm solid %PRIMARY_COLOR%;
-                       font-weight: 700; font-size: 11.5pt; color: %PRIMARY_COLOR%;
-                       margin-top: 2mm; padding-top: 2.5mm; }
-
-  .notes { margin-top: 10mm; font-size: 9.5pt; line-height: 1.5; }
-
-  .payment { margin-top: 8mm; padding: 4mm; border-radius: 1.5mm;
-             background: #f6f7f9; border-left: 1.2mm solid %ACCENT_COLOR%;
-             font-size: 9.5pt; line-height: 1.5;
-             display: flex; gap: 6mm; align-items: center; }
-  .payment .text { flex: 1; }
-  .payment strong { color: %PRIMARY_COLOR%; }
-  .payment .qr { text-align: center; }
-  .payment .qr img { width: 26mm; height: 26mm; object-fit: contain; }
-  .payment .qr .cap { font-size: 7pt; color: %MUTED_COLOR%; margin-top: 0.5mm; }
-
-  .page-footer { position: fixed; bottom: 8mm; left: 18mm; right: 18mm;
-                 text-align: center; font-size: 7.5pt; color: %MUTED_COLOR%;
-                 border-top: 0.2mm solid #d4d4d8; padding-top: 1.5mm;
-                 line-height: 1.4; }
-</style>
-</head>
-<body>
-
-<div class="page-footer">
-  {% if branding.footer_line_1 %}<div>{{ branding.footer_line_1 }}</div>{% endif %}
-  {% if branding.footer_line_2 %}<div>{{ branding.footer_line_2 }}</div>{% endif %}
-  {% if branding.footer_line_3 %}<div>{{ branding.footer_line_3 }}</div>{% endif %}
-</div>
-
-<div class="header">
-  <div class="seller">
-    <div class="name">{{ inv.seller_name }}</div>
-    {{ inv.seller_street }}<br>
-    {{ inv.seller_postcode }} {{ inv.seller_city }}<br>
-    {{ inv.seller_email }}
-  </div>
-  {% if branding.logo_filename %}
-  <div class="logo"><img src="{{ branding.logo_filename }}"></div>
-  {% endif %}
-</div>
-
-<div class="buyer-line">
-  {{ inv.seller_name }} &middot; {{ inv.seller_street }} &middot; {{ inv.seller_postcode }} {{ inv.seller_city }}
-</div>
-
-<div class="buyer">
-  <div class="name">{{ inv.buyer_name }}</div>
-  {{ inv.buyer_street }}<br>
-  {{ inv.buyer_postcode }} {{ inv.buyer_city }}
-  {% if inv.buyer_country and inv.buyer_country != "DE" %}<br>{{ inv.buyer_country }}{% endif %}
-  {% if inv.buyer_tax_id %}<br><span style="color:%MUTED_COLOR%">USt-IdNr.: {{ inv.buyer_tax_id }}</span>{% endif %}
-</div>
-
-<h1>Rechnung {{ inv.invoice_number }}</h1>
-
-<div class="meta">
-  <div class="block">
-    <div class="label">Rechnungsdatum</div>
-    <div class="value">{{ inv.issue_date|date }}</div>
-  </div>
-  <div class="block">
-    <div class="label">Leistungsdatum</div>
-    <div class="value">{{ inv.delivery_date|date }}</div>
-  </div>
-  <div class="block">
-    <div class="label">Fällig am</div>
-    <div class="value">{{ inv.due_date|date }}</div>
-  </div>
-  {% if inv.buyer_reference %}
-  <div class="block">
-    <div class="label">Referenz</div>
-    <div class="value">{{ inv.buyer_reference }}</div>
-  </div>
-  {% endif %}
-</div>
-
-<table class="items">
-  <thead>
-    <tr>
-      <th style="width:8mm">#</th>
-      <th>Beschreibung</th>
-      <th class="num" style="width:16mm">Menge</th>
-      <th class="num" style="width:22mm">Einzelpreis</th>
-      <th class="num" style="width:12mm">USt %</th>
-      <th class="num" style="width:26mm">Betrag</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for it in items %}
-    <tr>
-      <td>{{ it.position }}</td>
-      <td>{{ it.description }}</td>
-      <td class="num">{{ it.quantity|qty }}</td>
-      <td class="num">{{ it.unit_price|money(inv.currency) }}</td>
-      <td class="num">{{ '%.0f'|format(it.tax_rate) }} %</td>
-      <td class="num">{{ it.net_amount|money(inv.currency) }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-
-<div class="totals">
-  <div class="row"><span>Netto</span><span>{{ inv.net_total|money(inv.currency) }}</span></div>
-  <div class="row"><span>Umsatzsteuer</span><span>{{ inv.tax_total|money(inv.currency) }}</span></div>
-  <div class="row grand"><span>Gesamt</span><span>{{ inv.gross_total|money(inv.currency) }}</span></div>
-</div>
-
-{% if inv.notes %}
-<div class="notes"><strong>Hinweise:</strong><br>{{ inv.notes|replace('\n', '<br>')|safe }}</div>
-{% endif %}
-
-<div class="payment">
-  <div class="text">
-    <strong>Zahlungsbedingungen:</strong> {{ inv.payment_terms }}<br>
-    <strong>Bankverbindung:</strong>
-    {% if inv.seller_bank %}{{ inv.seller_bank }} &middot; {% endif %}
-    IBAN {{ inv.seller_iban }}
-    {% if inv.seller_bic %}&middot; BIC {{ inv.seller_bic }}{% endif %}<br>
-    <strong>Verwendungszweck:</strong> {{ inv.invoice_number }}
-  </div>
-  {% if inv.qr_code_filename %}
-  <div class="qr">
-    <img src="{{ inv.qr_code_filename }}">
-    <div class="cap">Mit Banking-App scannen</div>
-  </div>
-  {% endif %}
-</div>
-
-</body>
-</html>
-"""
+from .pdf_analyzer import ExtractedLayout, FieldBox
 
 
 def _fallback_chain_for(font_family: str, font_class: str) -> str:
-    """Stilistisch passende Fallback-Kette für den Fall, dass die Wunsch-Font
-    auf dem Zielrechner nicht installiert ist."""
     if font_class == "serif":
         return (f'"{font_family}", Georgia, "Times New Roman", Times, '
                 f'"DejaVu Serif", serif')
@@ -215,19 +22,192 @@ def _fallback_chain_for(font_family: str, font_class: str) -> str:
             f'"DejaVu Sans", sans-serif')
 
 
+def _box_css(box: FieldBox | None, fallback: dict) -> str:
+    """CSS-Positions-String für eine Box (in Prozent der A4-Seite)."""
+    if box is None:
+        b = fallback
+    else:
+        b = {"top": box.y_pct, "left": box.x_pct,
+             "width": box.width_pct, "height": box.height_pct}
+    return (f"top: {b['top']:.2f}%; left: {b['left']:.2f}%; "
+            f"width: {b['width']:.2f}%; height: {b['height']:.2f}%;")
+
+
+_TEMPLATE = r"""<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Rechnung {{ inv.invoice_number }}</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0;
+               font-family: %FONT_FALLBACK%;
+               color: %TEXT_COLOR%; font-size: %BASE_SIZE%pt; }
+
+  /* Seite in A4-Dimensionen - Hintergrund ist das Original-PDF */
+  .page {
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+    background-image: url("vorlage-hintergrund.png");
+    background-size: 210mm 297mm;
+    background-repeat: no-repeat;
+    background-position: 0 0;
+  }
+
+  /* Weißer Overlay deckt die alten Rechnungsdaten des Originals ab */
+  .overlay {
+    position: absolute;
+    background: white;
+    padding: 1mm;
+  }
+  /* Textcontent in den Overlays - scharfer Vektortext */
+  .overlay .content {
+    width: 100%; height: 100%;
+    line-height: 1.35;
+  }
+  .overlay.buyer .content { font-size: 10pt; }
+  .overlay.buyer strong { font-weight: 600; }
+
+  .overlay.meta .content { font-size: 9.5pt; text-align: right; }
+  .overlay.meta .label { color: %MUTED_COLOR%; font-size: 7.5pt;
+                         text-transform: uppercase; letter-spacing: 0.3pt; }
+
+  .overlay.items .content { font-size: 9.5pt; }
+  .overlay.items table { width: 100%; border-collapse: collapse; }
+  .overlay.items th { background: %PRIMARY_COLOR%; color: white; padding: 2mm;
+                      text-align: left; font-size: 9pt; font-weight: 600; }
+  .overlay.items th.num { text-align: right; }
+  .overlay.items td { padding: 2mm; border-bottom: 0.15mm solid #ddd;
+                      vertical-align: top; }
+  .overlay.items td.num { text-align: right; white-space: nowrap; }
+
+  .overlay.totals .content { font-size: 10pt; }
+  .overlay.totals .row { display: flex; justify-content: space-between;
+                         padding: 1mm 0; }
+  .overlay.totals .row.grand { border-top: 0.5mm solid %PRIMARY_COLOR%;
+                               font-weight: 700; color: %PRIMARY_COLOR%;
+                               font-size: 11pt; padding-top: 1.5mm; margin-top: 1mm; }
+
+  .overlay.payment .content { font-size: 9pt; display: flex; gap: 4mm;
+                              align-items: center; }
+  .overlay.payment .text { flex: 1; line-height: 1.4; }
+  .overlay.payment strong { color: %PRIMARY_COLOR%; }
+  .overlay.payment .qr { text-align: center; }
+  .overlay.payment .qr img { width: 24mm; height: 24mm; object-fit: contain; }
+  .overlay.payment .qr .cap { font-size: 6.5pt; color: %MUTED_COLOR%; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="overlay buyer" style="%BUYER_CSS%">
+    <div class="content">
+      <strong>{{ inv.buyer_name }}</strong><br>
+      {{ inv.buyer_street }}<br>
+      {{ inv.buyer_postcode }} {{ inv.buyer_city }}
+      {% if inv.buyer_country and inv.buyer_country != "DE" %}<br>{{ inv.buyer_country }}{% endif %}
+      {% if inv.buyer_tax_id %}<br><span style="color:%MUTED_COLOR%">USt-IdNr.: {{ inv.buyer_tax_id }}</span>{% endif %}
+    </div>
+  </div>
+
+  <div class="overlay meta" style="%META_CSS%">
+    <div class="content">
+      <div><span class="label">Rechnungs-Nr.</span> {{ inv.invoice_number }}</div>
+      <div><span class="label">Datum</span> {{ inv.issue_date|date }}</div>
+      <div><span class="label">Leistung</span> {{ inv.delivery_date|date }}</div>
+      <div><span class="label">Fällig</span> {{ inv.due_date|date }}</div>
+    </div>
+  </div>
+
+  <div class="overlay items" style="%ITEMS_CSS%">
+    <div class="content">
+      <table>
+        <thead><tr>
+          <th style="width:8mm">#</th>
+          <th>Beschreibung</th>
+          <th class="num" style="width:16mm">Menge</th>
+          <th class="num" style="width:22mm">Einzelpreis</th>
+          <th class="num" style="width:12mm">USt %</th>
+          <th class="num" style="width:26mm">Betrag</th>
+        </tr></thead>
+        <tbody>
+        {% for it in items %}
+          <tr>
+            <td>{{ it.position }}</td>
+            <td>{{ it.description }}</td>
+            <td class="num">{{ it.quantity|qty }}</td>
+            <td class="num">{{ it.unit_price|money(inv.currency) }}</td>
+            <td class="num">{{ '%.0f'|format(it.tax_rate) }} %</td>
+            <td class="num">{{ it.net_amount|money(inv.currency) }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="overlay totals" style="%TOTALS_CSS%">
+    <div class="content">
+      <div class="row"><span>Netto</span><span>{{ inv.net_total|money(inv.currency) }}</span></div>
+      <div class="row"><span>Umsatzsteuer</span><span>{{ inv.tax_total|money(inv.currency) }}</span></div>
+      <div class="row grand"><span>Gesamt</span><span>{{ inv.gross_total|money(inv.currency) }}</span></div>
+    </div>
+  </div>
+
+  <div class="overlay payment" style="%PAYMENT_CSS%">
+    <div class="content">
+      <div class="text">
+        <strong>Zahlbar bis {{ inv.due_date|date }}</strong> auf
+        {% if inv.seller_bank %}{{ inv.seller_bank }}, {% endif %}
+        IBAN {{ inv.seller_iban }}
+        {% if inv.seller_bic %} (BIC {{ inv.seller_bic }}){% endif %}.<br>
+        Verwendungszweck: <strong>{{ inv.invoice_number }}</strong>.
+      </div>
+      {% if inv.qr_code_filename %}
+      <div class="qr">
+        <img src="{{ inv.qr_code_filename }}">
+        <div class="cap">Scannen &amp; bezahlen</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
+"""
+
+
 def generate_template(layout) -> str:
-    """Nimmt ExtractedLayout und erzeugt eine frische, sauber gerenderte
-    Jinja2-HTML-Vorlage. Keine Rastergrafiken - nur Vektortext und -linien."""
+    """Erzeugt das Overlay-Template. Jede Box bekommt erkannte oder Standard-
+    Positionen."""
     muted = "#6b7280"
+
+    # Standard-Fallback-Positionen für den Fall, dass nichts erkannt wurde
+    defaults = {
+        "buyer":   {"top": 22, "left": 12, "width": 40, "height": 16},
+        "meta":    {"top": 22, "left": 55, "width": 38, "height": 14},
+        "items":   {"top": 45, "left": 5,  "width": 90, "height": 30},
+        "totals":  {"top": 77, "left": 55, "width": 40, "height": 12},
+        "payment": {"top": 90, "left": 5,  "width": 90, "height": 8},
+    }
+
     replacements = {
         "%PRIMARY_COLOR%": layout.primary_color,
         "%ACCENT_COLOR%": layout.accent_color,
         "%TEXT_COLOR%": layout.text_color,
         "%MUTED_COLOR%": muted,
-        "%FONT_FAMILY%": layout.font_family,
         "%FONT_FALLBACK%": _fallback_chain_for(layout.font_family, layout.font_class),
         "%BASE_SIZE%": f"{max(9, min(12, layout.base_font_size)):.1f}",
-        "%HEADING_SIZE%": f"{max(14, min(22, layout.heading_font_size)):.1f}",
+        "%BUYER_CSS%":   _box_css(layout.buyer_box,   defaults["buyer"]),
+        "%META_CSS%":    _box_css(layout.meta_box,    defaults["meta"]),
+        "%ITEMS_CSS%":   _box_css(layout.items_box,   defaults["items"]),
+        "%TOTALS_CSS%":  _box_css(layout.totals_box,  defaults["totals"]),
+        "%PAYMENT_CSS%": _box_css(layout.payment_box, defaults["payment"]),
     }
     html = _TEMPLATE
     for k, v in replacements.items():
