@@ -17,8 +17,20 @@ hidden += collect_submodules("weasyprint")
 hidden += collect_submodules("facturx")
 hidden += collect_submodules("uvicorn")
 hidden += collect_submodules("app")
+hidden += collect_submodules("webview")
 hidden += ["fastapi", "starlette", "jinja2", "sqlalchemy", "pydantic",
            "lxml", "lxml.etree", "multipart", "email.mime", "email.mime.text"]
+
+# Platform-spezifische pywebview-Backends
+if sys.platform == "darwin":
+    hidden += collect_submodules("objc")
+    hidden += collect_submodules("Foundation")
+    hidden += collect_submodules("AppKit")
+    hidden += collect_submodules("WebKit")
+    hidden += ["webview.platforms.cocoa"]
+elif sys.platform.startswith("win"):
+    hidden += ["webview.platforms.edgechromium", "webview.platforms.winforms"]
+    hidden += collect_submodules("clr_loader")
 
 datas = []
 datas += collect_data_files("weasyprint")

@@ -122,11 +122,15 @@ def main() -> int:
         # Bevorzugt pywebview, Fallback auf Browser
         try:
             import webview
-            log("Oeffne natives Fenster via pywebview")
+            log(f"pywebview geladen (Version: {getattr(webview, '__version__', '?')})")
             window = webview.create_window(
                 "SmartRechnung", url, width=1180, height=820, min_size=(800, 600),
             )
-            webview.start()
+            # Backend je Plattform explizit - sonst kann pywebview auf macOS in
+            # bestimmten PyInstaller-Builds nicht entscheiden, welches Backend es nimmt.
+            gui = "cocoa" if sys.platform == "darwin" else ("edgechromium" if sys.platform.startswith("win") else None)
+            log(f"Starte pywebview mit gui={gui}")
+            webview.start(gui=gui, debug=False)
             log("Fenster geschlossen, beende App")
         except ImportError as e:
             log(f"pywebview nicht verfuegbar ({e}), oeffne Systembrowser")
