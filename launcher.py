@@ -1,16 +1,9 @@
-"""Desktop-Launcher mit Fehler-Logging.
-
-Alles, was schiefgeht, wird in eine Log-Datei geschrieben:
-  Windows: %USERPROFILE%\\Documents\\SmartRechnung\\startup.log
-  macOS:   ~/Documents/SmartRechnung/startup.log
-  Linux:   ~/.local/share/SmartRechnung/startup.log
-
-Wenn die App nicht startet, schick mir diese Datei - da steht der Grund drin.
-"""
+"""Desktop-Launcher. Nutzt jetzt Playwright+Chromium fuer die PDF-Erzeugung
+statt WeasyPrint - keine System-C-Libraries mehr noetig, keine Pango-
+Konflikte."""
 
 from __future__ import annotations
 
-import ctypes
 import os
 import socket
 import sys
@@ -19,128 +12,6 @@ import time
 import traceback
 import webbrowser
 from pathlib import Path
-
-
-# Fontconfig- und Pango-Debug aktivieren, damit wir in stderr/Logs sehen,
-# was beim PDF-Erzeugen schief geht. FC_DEBUG=1 reicht fuer "matching" output.
-os.environ["FC_DEBUG"] = "1"
-os.environ["PANGOCAIRO_BACKEND"] = "fc"
-
-
-def _bootstrap_macos_libs() -> None:
-    """Vor WeasyPrint-Import:
-    - gebuendelte dylibs via ctypes vorladen (gobject/pango/cairo/...)
-    - Fontconfig auf eine mitgelieferte fonts.conf zeigen lassen, die
-      auf macOS-System-Fontpfade verweist statt auf Homebrew
-    - FONTCONFIG_PATH/FONTCONFIG_FILE und DYLD_FALLBACK_LIBRARY_PATH setzen
-    """
-    if not (getattr(sys, "frozen", False) and sys.platform == "darwin"):
-        return
-    bundle_dir = Path(os.path.abspath(sys.executable)).parent  # Contents/MacOS/
-    contents = bundle_dir.parent  # Contents/
-    frameworks = (contents / "Frameworks").resolve()
-    resources = (contents / "Resources").resolve()
-
-    if frameworks.is_dir():
-        current = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
-        os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
-            f"{frameworks}:{current}" if current else str(frameworks)
-        )
-
-        # KERN-FIX: cffi.FFI.dlopen() muss mit RTLD_GLOBAL arbeiten.
-        # Standardmaessig nutzt cffi RTLD_LOCAL - jede Lib bekommt einen
-        # separaten Symbol-Namespace. Resultat: libpango laedt intern
-        # libgobject neu, auch wenn libgobject schon im Prozess ist.
-        # Das erzeugt zwei GType-Instanzen -> 'cannot register existing
-        # type PangoFontMap' -> nativer Crash.
-        import cffi
-        import cffi.api
-        _orig_dlopen = cffi.api.FFI.dlopen
-        _RTLD_GLOBAL = 0x8
-        _RTLD_LAZY = 0x1
-
-        def _global_dlopen(self, name, flags=None):
-            # Explizit RTLD_GLOBAL|RTLD_LAZY, auch wenn flags uebergeben wurden
-            new_flags = (flags or 0) | _RTLD_GLOBAL | _RTLD_LAZY
-            return _orig_dlopen(self, name, flags=new_flags)
-
-        cffi.api.FFI.dlopen = _global_dlopen
-        cffi.FFI.dlopen = _global_dlopen
-
-        # Zusaetzlich libglib/libgobject etc. vorab global laden, damit
-        # dyld sie ueberhaupt findet (DYLD_FALLBACK reicht nicht immer)
-        import glob as _glob
-        for pattern in ["libglib-2.0.0.dylib", "libgobject-2.0.0.dylib",
-                        "libgio-2.0.0.dylib", "libgmodule-2.0.0.dylib",
-                        "libffi.*.dylib", "libintl.*.dylib",
-                        "libpcre2-8.0.dylib"]:
-            for path in _glob.glob(str(frameworks / pattern)):
-                try:
-                    ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
-                except OSError:
-                    pass
-
-    # Fontconfig: wir schreiben beim Start eine fonts.conf MIT ABSOLUTEN PFADEN
-    # ins User-Verzeichnis. Grund: Fontconfig mag keine relativen Pfade in
-    # <dir>-Eintraegen, besonders nicht wenn es an verschiedenen Orten laeuft
-    # (AppTranslocation!). Darum bauen wir die Konfig live.
-    bundled_fonts = resources / "fonts"
-    user_data_dir = Path.home() / "Documents" / "SmartRechnung"
-    user_data_dir.mkdir(parents=True, exist_ok=True)
-    user_fonts_conf = user_data_dir / "fonts.conf"
-
-    fonts_conf_text = f"""<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
-<fontconfig>
-  <dir>{bundled_fonts}</dir>
-  <dir>/System/Library/Fonts</dir>
-  <dir>/Library/Fonts</dir>
-  <dir>{Path.home() / "Library" / "Fonts"}</dir>
-  <cachedir>{Path.home() / ".cache" / "fontconfig"}</cachedir>
-
-  <alias><family>serif</family><prefer>
-    <family>DejaVu Serif</family><family>Helvetica</family><family>Arial</family>
-  </prefer></alias>
-  <alias><family>sans-serif</family><prefer>
-    <family>DejaVu Sans</family><family>Helvetica Neue</family>
-    <family>Helvetica</family><family>Arial</family>
-  </prefer></alias>
-  <alias><family>monospace</family><prefer>
-    <family>DejaVu Sans Mono</family><family>Menlo</family><family>Monaco</family>
-  </prefer></alias>
-
-  <!-- CATCH-ALL: Jeder Font-Lookup (egal welcher Name!) bekommt am Ende
-       eine stilistisch passende Kette angehaengt, damit Pango IMMER
-       eine Font findet - und eine die stilistisch passt.
-
-       Die Reihenfolge ist absichtlich: zuerst Serif-Fallbacks, dann
-       Sans-Fallbacks, dann Mono-Fallbacks. Fontconfig waehlt davon
-       die erste tatsaechlich vorhandene. -->
-  <match target="pattern">
-    <edit name="family" mode="append_last" binding="weak">
-      <string>Georgia</string>
-      <string>Times New Roman</string>
-      <string>DejaVu Serif</string>
-      <string>Helvetica Neue</string>
-      <string>Helvetica</string>
-      <string>Arial</string>
-      <string>DejaVu Sans</string>
-      <string>Menlo</string>
-      <string>DejaVu Sans Mono</string>
-    </edit>
-  </match>
-</fontconfig>
-"""
-    user_fonts_conf.write_text(fonts_conf_text, encoding="utf-8")
-    os.environ["FONTCONFIG_FILE"] = str(user_fonts_conf)
-    os.environ["FONTCONFIG_PATH"] = str(resources)
-
-    # Fontconfig-Cache
-    (Path.home() / ".cache" / "fontconfig").mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("XDG_CACHE_HOME", str(Path.home() / ".cache"))
-
-
-_bootstrap_macos_libs()
 
 
 def _log_dir() -> Path:
@@ -159,19 +30,40 @@ LOG_FILE = _log_dir() / "startup.log"
 STDERR_FILE = _log_dir() / "stderr.log"
 
 
-# stderr/stdout umleiten in eine Datei, damit native Pango/Cairo-Fehler
-# (die bisher auf den Terminal gingen und bei .app-Launch verloren waren)
-# abgefangen werden. Das machen wir VOR allem anderen.
+# stderr/stdout in Datei umleiten, damit native Fehler lesbar sind
 try:
     _err = open(STDERR_FILE, "a", buffering=1, encoding="utf-8")
     _err.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
     _err.flush()
-    os.dup2(_err.fileno(), 2)  # FD 2 = stderr
-    os.dup2(_err.fileno(), 1)  # FD 1 = stdout
+    os.dup2(_err.fileno(), 2)
+    os.dup2(_err.fileno(), 1)
     sys.stderr = _err
     sys.stdout = _err
 except Exception:
     pass
+
+
+def _setup_playwright_browsers_path() -> None:
+    """In der gepackten App (PyInstaller) liegt Chromium unter
+    Resources/ms-playwright/. Diese Umgebungsvariable zeigt Playwright
+    darauf, sodass es nicht versucht, Chromium nachzuinstallieren."""
+    if not getattr(sys, "frozen", False):
+        return
+    # PyInstaller onedir: sys._MEIPASS zeigt auf das Extraktions-Verzeichnis.
+    # macOS .app-Bundle: Contents/MacOS/SmartRechnung + Contents/Resources
+    bundle_dir = Path(os.path.abspath(sys.executable)).parent
+    candidates = [
+        Path(getattr(sys, "_MEIPASS", str(bundle_dir))) / "ms-playwright",
+        bundle_dir / ".." / "Resources" / "ms-playwright",
+        bundle_dir / "ms-playwright",
+    ]
+    for p in candidates:
+        if p.exists() and any(p.iterdir()):
+            os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(p.resolve())
+            return
+
+
+_setup_playwright_browsers_path()
 
 
 def log(msg: str) -> None:
@@ -213,7 +105,7 @@ def _run_server(port: int):
         log("Starte uvicorn ...")
         import uvicorn
         log("uvicorn importiert, importiere app.main ...")
-        from app.main import app  # Hier kracht es, wenn Deps fehlen
+        from app.main import app
         log("app.main importiert, starte Server ...")
         uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     except Exception:
@@ -221,7 +113,6 @@ def _run_server(port: int):
 
 
 def _show_error_window(message: str):
-    """Letzter Rettungsanker: Fehlermeldung in nativem Fenster anzeigen."""
     try:
         import tkinter as tk
         from tkinter import messagebox
@@ -230,7 +121,6 @@ def _show_error_window(message: str):
         messagebox.showerror("SmartRechnung konnte nicht starten", message)
         root.destroy()
     except Exception:
-        # Wenn selbst tkinter nicht geht: stdout/stderr
         print(message, file=sys.stderr)
 
 
@@ -238,7 +128,7 @@ def main() -> int:
     log("=" * 60)
     log(f"SmartRechnung-Start | Python {sys.version} | Platform {sys.platform}")
     log(f"Executable: {sys.executable}")
-    log(f"Log-Datei: {LOG_FILE}")
+    log(f"PLAYWRIGHT_BROWSERS_PATH = {os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '(nicht gesetzt)')}")
 
     try:
         port = _find_free_port()
@@ -252,21 +142,18 @@ def main() -> int:
             msg = (f"Der eingebaute Server konnte nicht starten.\n\n"
                    f"Details in: {LOG_FILE}\n\n"
                    f"Bitte diese Datei an den Entwickler schicken.")
-            log("FEHLER: Server-Timeout. Datei-Log siehe oben.")
+            log("FEHLER: Server-Timeout.")
             _show_error_window(msg)
             return 1
 
         log(f"Server laeuft auf {url}")
 
-        # Bevorzugt pywebview, Fallback auf Browser
         try:
             import webview
-            log(f"pywebview geladen (Version: {getattr(webview, '__version__', '?')})")
-            window = webview.create_window(
+            log(f"pywebview geladen")
+            webview.create_window(
                 "SmartRechnung", url, width=1180, height=820, min_size=(800, 600),
             )
-            # Backend je Plattform explizit - sonst kann pywebview auf macOS in
-            # bestimmten PyInstaller-Builds nicht entscheiden, welches Backend es nimmt.
             gui = "cocoa" if sys.platform == "darwin" else ("edgechromium" if sys.platform.startswith("win") else None)
             log(f"Starte pywebview mit gui={gui}")
             webview.start(gui=gui, debug=False)
@@ -275,8 +162,6 @@ def main() -> int:
             log(f"pywebview nicht verfuegbar ({e}), oeffne Systembrowser")
             webbrowser.open(url)
             print(f"\nSmartRechnung laeuft auf {url}")
-            print("Dieses Fenster geschlossen lassen, solange du die App nutzt.")
-            print("Zum Beenden: Strg+C oder Fenster schliessen.\n")
             try:
                 while True:
                     time.sleep(1)
@@ -298,8 +183,7 @@ def main() -> int:
         tb = traceback.format_exc()
         log("STARTUP-FEHLER:\n" + tb)
         _show_error_window(
-            f"SmartRechnung ist beim Start abgestuerzt.\n\n"
-            f"{tb}\n\nLog: {LOG_FILE}"
+            f"SmartRechnung ist beim Start abgestuerzt.\n\n{tb}\n\nLog: {LOG_FILE}"
         )
         return 1
 

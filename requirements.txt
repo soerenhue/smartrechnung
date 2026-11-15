@@ -4,7 +4,10 @@ jinja2==3.1.4
 python-multipart==0.0.20
 sqlalchemy==2.0.36
 pydantic==2.10.4
-weasyprint==63.1
+# WeasyPrint war auf macOS+PyInstaller durch GObject/Pango-Konflikte
+# nicht stabil zu bekommen. Ersetzt durch Playwright+Chromium:
+# keine System-C-Libs, garantiert stabil.
+playwright==1.49.0
 factur-x==3.5
 lxml==5.3.0
 python-dateutil==2.9.0.post0

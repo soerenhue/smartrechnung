@@ -16,13 +16,10 @@ jobs:
             archive: "pwsh -Command Compress-Archive -Path dist/* -DestinationPath SmartRechnung-Windows.zip"
           - os: macos-latest
             artifact: SmartRechnung-macOS.zip
-            # -y: Symlinks als Symlinks speichern, nicht aufloesen.
-            # Sonst bricht das ZIP die Dedup-Symlinks auf, die Code-Signatur
-            # wird ungueltig und macOS meldet 'Datei ist beschaedigt'.
             archive: "cd dist && zip -ry ../SmartRechnung-macOS.zip ."
           - os: ubuntu-latest
             artifact: SmartRechnung-Linux.tar.gz
-            archive: "tar -czvf SmartRechnung-Linux.tar.gz -C dist ."
+            archive: "tar -czf SmartRechnung-Linux.tar.gz -C dist ."
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -32,185 +29,34 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install system libs (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
-              libcairo2 libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info
-
-      - name: Install system libs (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install pango cairo gdk-pixbuf libffi dylibbundler
-          # Die brew-Libs auf Apple Silicon liegen in /opt/homebrew/lib,
-          # auf Intel-Macs in /usr/local/lib. Beides fuer den Build verfuegbar machen.
-          echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:/usr/local/lib" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig" >> $GITHUB_ENV
-
-      # macOS braucht .icns - wir generieren es aus den PNGs
-      - name: Build macOS .icns
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p assets/icon.iconset
-          cp assets/icon_16.png   assets/icon.iconset/icon_16x16.png
-          cp assets/icon_32.png   assets/icon.iconset/icon_16x16@2x.png
-          cp assets/icon_32.png   assets/icon.iconset/icon_32x32.png
-          cp assets/icon_64.png   assets/icon.iconset/icon_32x32@2x.png
-          cp assets/icon_128.png  assets/icon.iconset/icon_128x128.png
-          cp assets/icon_256.png  assets/icon.iconset/icon_128x128@2x.png
-          cp assets/icon_256.png  assets/icon.iconset/icon_256x256.png
-          cp assets/icon_512.png  assets/icon.iconset/icon_256x256@2x.png
-          cp assets/icon_512.png  assets/icon.iconset/icon_512x512.png
-          cp assets/icon_1024.png assets/icon.iconset/icon_512x512@2x.png
-          iconutil -c icns assets/icon.iconset -o assets/icon.icns
-          ls -la assets/icon.icns
-
       - name: Install Python deps
         run: pip install -r requirements.txt
 
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          # Browser in ein bekanntes Verzeichnis im Projektpfad installieren,
+          # damit PyInstaller es finden und mitpacken kann.
+          mkdir -p "$GITHUB_WORKSPACE/ms-playwright"
+          export PLAYWRIGHT_BROWSERS_PATH="$GITHUB_WORKSPACE/ms-playwright"
+          echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> $GITHUB_ENV
+          python -m playwright install chromium
+          echo "=== Chromium in Bundle-Pfad: ==="
+          ls -la "$PLAYWRIGHT_BROWSERS_PATH" | head -5
+
       - name: Build with PyInstaller
+        shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
         run: pyinstaller erechnung.spec --clean --noconfirm
 
-      # macOS: System-dylibs ins .app-Bundle kopieren.
-      # WeasyPrint laedt gobject/pango/cairo erst zur LAUFZEIT ueber dlopen,
-      # d.h. die Libs sind nicht gelinkt - dylibbundler erkennt sie nicht
-      # selbststaendig. Deshalb kopieren wir sie explizit hinein und lassen
-      # dylibbundler dann die Transitive-Deps rebundeln.
-      - name: Bundle dylibs (macOS)
+      - name: macOS - entferne nackte Binary + signiere
         if: runner.os == 'macOS'
         run: |
-          set -e
           APP="dist/SmartRechnung.app"
-          if [ ! -d "$APP" ]; then
-            echo "Kein .app-Bundle in dist/ gefunden"; exit 1
-          fi
-          FRAMEWORKS="$APP/Contents/Frameworks"
-          mkdir -p "$FRAMEWORKS"
-
-          # Alle Libs, die WeasyPrint / fontconfig / cairo zur Laufzeit erwartet.
-          # harfbuzz-subset ist kritisch: Pango 1.50+ braucht es, weil es
-          # beim Layout nach ihm greift - fehlt es, ist das ein stiller
-          # nativer Crash OHNE Python-Trace.
-          LIBS="libgobject-2.0 libglib-2.0 libgio-2.0 libgmodule-2.0 libgthread-2.0 \
-                libpango-1.0 libpangoft2-1.0 libpangocairo-1.0 \
-                libcairo libcairo-gobject \
-                libgdk_pixbuf-2.0 \
-                libharfbuzz libharfbuzz-subset libharfbuzz-cairo libharfbuzz-gobject \
-                libfontconfig libfreetype libpng16 \
-                libffi libintl libpcre2-8 libpixman-1 \
-                libxml2 libxcb libxau libxdmcp libbrotlidec libbrotlicommon \
-                libgraphite2 libz liblzma libexpat libiconv"
-
-          for prefix in /opt/homebrew/lib /usr/local/lib; do
-            if [ -d "$prefix" ]; then
-              for lib in $LIBS; do
-                for f in "$prefix/${lib}"*.dylib; do
-                  [ -f "$f" ] && cp -L "$f" "$FRAMEWORKS/" 2>/dev/null || true
-                done
-              done
-            fi
-          done
-
-          echo "=== Kopierte Libs: ==="
-          ls -1 "$FRAMEWORKS" | head -40
-
-          # Jetzt transitive Abhaengigkeiten ergaenzen und IDs umbiegen.
-          # ACHTUNG: KEIN -od! Das wuerde Frameworks/ zuerst leeren und unsere
-          # vorher kopierten dlopen-only-Libs (gobject etc.) wieder entfernen.
-          BIN="$APP/Contents/MacOS/SmartRechnung"
-          dylibbundler -b -x "$BIN" -d "$FRAMEWORKS/" -p "@executable_path/../Frameworks/" || true
-          for f in "$FRAMEWORKS"/*.dylib; do
-            dylibbundler -of -b -x "$f" -d "$FRAMEWORKS/" -p "@executable_path/../Frameworks/" 2>/dev/null || true
-          done
-          # KRITISCH: Duplikate zu Symlinks machen, damit libpango/libgobject
-          # etc. physisch nur EINMAL im Bundle liegen. Sonst wird z.B.
-          # libpango-1.0.0.dylib ueber einen Pfad geladen und libpango-1.0.dylib
-          # ueber einen anderen - GType registriert PangoFontMap zweimal
-          # -> 'cannot register existing type' -> nativer Crash in write_pdf().
-          cd "$FRAMEWORKS"
-          echo "=== Vor Dedup: $(ls *.dylib 2>/dev/null | wc -l) dylib-Dateien ==="
-
-          # Schritt 1: Alle unversionierten Varianten (libX.dylib ohne Zahl davor)
-          # loeschen, falls eine versionierte Variante existiert.
-          for f in *.dylib; do
-            [ -L "$f" ] && continue  # bereits Symlink - OK
-            if ! [[ "$f" =~ \.[0-9]+\.dylib$ ]]; then
-              # Unversioniert - pruefe ob versionierte Variante existiert
-              stem="${f%.dylib}"
-              for v in "${stem}".*.dylib; do
-                if [ -f "$v" ] && [ "$v" != "$f" ]; then
-                  rm -f "$f"
-                  break
-                fi
-              done
-            fi
-          done
-
-          # Schritt 2: Fuer jede versionierte Lib einen Symlink ohne Version
-          # erstellen (libpango-1.0.0.dylib -> libpango-1.0.dylib Symlink).
-          # So finden Programme, die nach dem unversionierten Namen suchen,
-          # dieselbe physische Datei.
-          for f in *.dylib; do
-            [ -L "$f" ] && continue
-            if [[ "$f" =~ ^(.+)\.[0-9]+\.dylib$ ]]; then
-              stem="${BASH_REMATCH[1]}"
-              short="${stem}.dylib"
-              if [ ! -e "$short" ]; then
-                ln -sf "$f" "$short"
-              fi
-            fi
-          done
-
-          echo "=== Nach Dedup: $(ls *.dylib 2>/dev/null | wc -l) Eintraege (davon Symlinks: $(ls -la *.dylib 2>/dev/null | grep -c '^l')) ==="
-          cd -
-
-          # install_name auf allen echten Dateien setzen (Symlinks ueberspringen)
-          for f in "$FRAMEWORKS"/*.dylib; do
-            [ -L "$f" ] && continue
-            install_name_tool -id "@executable_path/../Frameworks/$(basename $f)" "$f" 2>/dev/null || true
-          done
-
-          # Eigene fonts.conf nach Contents/Resources kopieren
-          mkdir -p "$APP/Contents/Resources"
-          cp assets/fonts.conf "$APP/Contents/Resources/fonts.conf"
-          echo "fonts.conf kopiert nach $APP/Contents/Resources/"
-
-          # DejaVu-Fonts direkt ins Bundle packen
-          mkdir -p "$APP/Contents/Resources/fonts"
-          curl -sL https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2 \
-            -o /tmp/dejavu.tar.bz2
-          tar -xjf /tmp/dejavu.tar.bz2 -C /tmp/
-          cp /tmp/dejavu-fonts-ttf-2.37/ttf/*.ttf "$APP/Contents/Resources/fonts/"
-          echo "=== Mitgelieferte Fonts ==="
-          ls -la "$APP/Contents/Resources/fonts/"
-
-          # Signatur ALS ALLERLETZTEN Schritt nach ALLEN Aenderungen.
-          # Vorher evtl. vorhandene Signaturen entfernen, dann frisch signieren -
-          # sonst sieht macOS Diskrepanz zwischen alten Signaturen und
-          # neu umgeschriebenen install_names und meldet 'beschaedigt'.
-          # --preserve-metadata=identifier,entitlements laesst essenzielle
-          # Metadaten erhalten, --deep signiert alle Nested Bundles (dylibs).
-          echo "=== Entferne alte Signaturen und signiere frisch ==="
-          find "$APP" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign --remove-signature {} \; 2>/dev/null || true
-          codesign --remove-signature "$APP" 2>/dev/null || true
-          codesign --force --deep --sign - --timestamp=none "$APP"
-          # Verifizieren
-          codesign --verify --deep --strict "$APP" && echo "Signatur OK" || echo "Signatur WARN"
-
-          # Ad-hoc signieren, sonst blockt macOS die umgeschriebenen Libs
-          codesign --force --deep --sign - "$APP" || true
-
-          echo "=== Final im Frameworks: ==="
-          ls -1 "$FRAMEWORKS" | wc -l
-          echo "Dateien im Frameworks-Verzeichnis"
-
-          # Die nackte Unix-Binary neben der .app nicht ausliefern - sie verwirrt
-          # nur, weil sie ohne .app-Wrapper die System-Libs nicht findet.
-          if [ -f "dist/SmartRechnung" ]; then
-            rm -f "dist/SmartRechnung"
-            echo "Nackte Binary 'dist/SmartRechnung' entfernt - nur .app wird ausgeliefert"
-          fi
+          [ -f "dist/SmartRechnung" ] && rm -f "dist/SmartRechnung"
+          # Ad-hoc-Signatur auf das gesamte Bundle
+          codesign --force --deep --sign - --timestamp=none "$APP" || true
           ls -la dist/
 
       - name: Package
