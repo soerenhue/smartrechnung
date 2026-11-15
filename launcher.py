@@ -22,25 +22,39 @@ from pathlib import Path
 
 
 def _bootstrap_macos_libs() -> None:
-    """Vor WeasyPrint-Import die mitgelieferten dylibs vorab per ctypes laden,
-    damit cffi/weasyprint sie beim ersten dlopen findet. Setzt zusaetzlich
-    DYLD_FALLBACK_LIBRARY_PATH fuer etwaige Child-Prozesse."""
+    """Vor WeasyPrint-Import:
+    - gebuendelte dylibs via ctypes vorladen (gobject/pango/cairo/...)
+    - Fontconfig auf eine mitgelieferte fonts.conf zeigen lassen, die
+      auf macOS-System-Fontpfade verweist statt auf Homebrew
+    - FONTCONFIG_PATH/FONTCONFIG_FILE und DYLD_FALLBACK_LIBRARY_PATH setzen
+    """
     if not (getattr(sys, "frozen", False) and sys.platform == "darwin"):
         return
     bundle_dir = Path(os.path.abspath(sys.executable)).parent  # Contents/MacOS/
-    frameworks = (bundle_dir / ".." / "Frameworks").resolve()
-    if not frameworks.is_dir():
-        return
-    current = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
-    os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
-        f"{frameworks}:{current}" if current else str(frameworks)
-    )
-    # Alle dylibs mit RTLD_GLOBAL vorladen
-    for p in sorted(frameworks.glob("*.dylib")):
-        try:
-            ctypes.CDLL(str(p), mode=ctypes.RTLD_GLOBAL)
-        except OSError:
-            pass
+    contents = bundle_dir.parent  # Contents/
+    frameworks = (contents / "Frameworks").resolve()
+    resources = (contents / "Resources").resolve()
+
+    if frameworks.is_dir():
+        current = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+        os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
+            f"{frameworks}:{current}" if current else str(frameworks)
+        )
+        for p in sorted(frameworks.glob("*.dylib")):
+            try:
+                ctypes.CDLL(str(p), mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                pass
+
+    # Fontconfig: eigene Konfig verwenden, die auf macOS-Systemfonts zeigt
+    fonts_conf = resources / "fonts.conf"
+    if fonts_conf.exists():
+        os.environ["FONTCONFIG_FILE"] = str(fonts_conf)
+        os.environ["FONTCONFIG_PATH"] = str(resources)
+    # Fontconfig-Cache in ein User-schreibbares Verzeichnis
+    cache = Path.home() / ".cache" / "fontconfig"
+    cache.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("XDG_CACHE_HOME", str(Path.home() / ".cache"))
 
 
 _bootstrap_macos_libs()

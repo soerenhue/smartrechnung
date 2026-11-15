@@ -38,6 +38,9 @@ datas += collect_data_files("facturx")
 datas += collect_data_files("fastapi")
 datas += collect_data_files("starlette")
 datas += [("app/templates", "app/templates")]
+# fonts.conf wird ins App-Bundle unter Contents/Resources kopiert (macOS)
+# bzw. neben das Executable (Windows/Linux). Launcher findet sie automatisch.
+datas += [("assets/fonts.conf", ".")]
 
 # Platform-spezifisches Icon
 if sys.platform.startswith("win"):

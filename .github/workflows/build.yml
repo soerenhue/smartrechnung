@@ -122,6 +122,15 @@ jobs:
             install_name_tool -id "@executable_path/../Frameworks/$(basename $f)" "$f" 2>/dev/null || true
           done
 
+          # Eigene fonts.conf nach Contents/Resources kopieren
+          # (zeigt auf macOS-Systemschriften statt auf Homebrew-Pfade)
+          mkdir -p "$APP/Contents/Resources"
+          cp assets/fonts.conf "$APP/Contents/Resources/fonts.conf"
+          echo "fonts.conf kopiert nach $APP/Contents/Resources/"
+
+          # Signatur refresh nach allen Aenderungen
+          codesign --force --deep --sign - "$APP" || true
+
           # Ad-hoc signieren, sonst blockt macOS die umgeschriebenen Libs
           codesign --force --deep --sign - "$APP" || true
 
