@@ -11,6 +11,7 @@ alles Noetige mit und ist vollstaendig unabhaengig vom System.
 
 from __future__ import annotations
 
+import concurrent.futures
 import os
 import sys
 import time
@@ -25,6 +26,13 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from .branding import load_branding
 from .config import Company, DATA_DIR
 from .models import Invoice
+
+
+# Playwright's sync API kann nicht im FastAPI-asyncio-Loop laufen.
+# Wir fuehren sie in einem separaten Thread aus, der keinen asyncio-
+# Loop hat. ThreadPoolExecutor = 1 damit Chromium-Instanzen nicht
+# parallel laufen (das wuerde den Prozess bei vielen Rechnungen killen).
+_pdf_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="pdf-render")
 
 
 def _diag(msg: str) -> None:
@@ -82,36 +90,19 @@ def render_invoice_pdf(inv: Invoice, company: Company) -> bytes:
 
     # HTML temporaer in das Assets-Verzeichnis der Firma schreiben, damit
     # relative Pfade (Logo, QR-Code) aufgeloest werden koennen.
-    tmp_html = company.assets_dir / f".invoice_render_{inv.invoice_number}.html"
+    safe_number = inv.invoice_number.replace("/", "-").replace(" ", "_").replace("\\", "-")
+    tmp_html = company.assets_dir / f".invoice_render_{safe_number}.html"
+    tmp_html.write_text(html_text, encoding="utf-8")
+    _diag(f"  Temp-HTML: {tmp_html}")
+
     try:
-        tmp_html.write_text(html_text, encoding="utf-8")
-        _diag(f"  Temp-HTML: {tmp_html}")
-
-        # Chromium via Playwright - erst hier importieren (lange Startzeit)
-        _diag("  Importiere playwright...")
-        from playwright.sync_api import sync_playwright  # noqa: PLC0415
-        _diag("  playwright importiert, starte Chromium...")
-
+        # Playwright in separatem Thread laufen lassen - der FastAPI-
+        # asyncio-Loop wuerde sonst die sync-API blockieren.
+        future = _pdf_executor.submit(_render_pdf_in_thread, tmp_html.resolve().as_uri())
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                try:
-                    _diag("  Chromium gestartet, oeffne HTML...")
-                    page = browser.new_page()
-                    file_url = tmp_html.resolve().as_uri()
-                    page.goto(file_url, wait_until="networkidle", timeout=30000)
-                    _diag("  Rendere PDF...")
-                    pdf_bytes = page.pdf(
-                        format="A4",
-                        print_background=True,
-                        margin={"top": "18mm", "right": "15mm",
-                                "bottom": "22mm", "left": "15mm"},
-                        prefer_css_page_size=True,
-                    )
-                    _diag(f"  PDF fertig: {len(pdf_bytes)} Bytes")
-                    return pdf_bytes
-                finally:
-                    browser.close()
+            pdf_bytes = future.result(timeout=90)
+            _diag(f"  PDF fertig: {len(pdf_bytes)} Bytes")
+            return pdf_bytes
         except Exception:
             _diag("PDF-FEHLER (Playwright):\n" + traceback.format_exc())
             raise
@@ -120,3 +111,27 @@ def render_invoice_pdf(inv: Invoice, company: Company) -> bytes:
             tmp_html.unlink()
         except OSError:
             pass
+
+
+def _render_pdf_in_thread(file_url: str) -> bytes:
+    """Laeuft im ThreadPoolExecutor - hier ist KEIN asyncio-Loop aktiv,
+    also funktioniert Playwright's sync API einwandfrei."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
+        try:
+            page = browser.new_page()
+            page.goto(file_url, wait_until="networkidle", timeout=30000)
+            return page.pdf(
+                format="A4",
+                print_background=True,
+                margin={"top": "18mm", "right": "15mm",
+                        "bottom": "22mm", "left": "15mm"},
+                prefer_css_page_size=True,
+            )
+        finally:
+            browser.close()
