@@ -135,11 +135,29 @@ def about_page(request: Request):
     return _render(request, "about.html", {"version": "1.0"})
 
 
+@app.get("/einrichtung")
+def wizard_page(request: Request):
+    """Onboarding-Wizard für die erste Firma (einfacher als /firmen/neu)."""
+    return _render(request, "wizard.html", {})
+
+
+@app.get("/einstellungen")
+def settings_dashboard(request: Request, db: Session = Depends(get_db)):
+    """Zentrales Einstellungs-Dashboard mit Kacheln zu allen Bereichen."""
+    companies = list_companies()
+    if not companies:
+        return RedirectResponse("/einrichtung", status_code=303)
+    c = active_company(request) or companies[0]
+    customer_count = db.query(Customer).filter(Customer.company_slug == c.slug).count() if c else 0
+    return _render(request, "settings_dashboard.html",
+                   {"customer_count": customer_count})
+
+
 @app.get("/")
 def index(request: Request, db: Session = Depends(get_db)):
     companies = list_companies()
     if not companies:
-        return RedirectResponse("/firmen/neu?first=1", status_code=303)
+        return RedirectResponse("/einrichtung", status_code=303)
     c = active_company(request) or companies[0]
     if not c.is_configured():
         return RedirectResponse(f"/firmen/{c.slug}", status_code=303)

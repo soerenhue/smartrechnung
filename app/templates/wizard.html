@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% block title %}Einrichtung{% endblock %}
+{% block content %}
+<style>
+  .wizard { max-width: 760px; margin: 20px auto; }
+  .wizard-progress { display: flex; margin-bottom: 24px; gap: 4px; }
+  .wizard-progress .step { flex: 1; height: 6px; background: #e5e7eb; border-radius: 3px; }
+  .wizard-progress .step.active { background: var(--primary); }
+  .wizard-progress .step.done { background: #10b981; }
+  .wizard-step { display: none; }
+  .wizard-step.active { display: block; }
+  .wizard-step h2 { margin-top: 0; font-size: 1.5rem; }
+  .wizard-step .hint { background: #eff6ff; border-left: 4px solid var(--primary);
+                       padding: 12px 16px; margin: 12px 0; border-radius: 4px;
+                       font-size: 0.9rem; }
+  .wizard-nav { display: flex; justify-content: space-between; margin-top: 24px;
+                padding-top: 16px; border-top: 1px solid var(--border); }
+  .wizard-nav .btn { min-width: 120px; }
+  .big-choice { display: block; padding: 16px 20px; margin: 10px 0;
+                border: 2px solid var(--border); border-radius: 8px;
+                cursor: pointer; transition: all 0.15s; }
+  .big-choice:hover { border-color: var(--primary); background: #f8fafc; }
+  .big-choice input { display: none; }
+  .big-choice input:checked + .label { color: var(--primary); }
+  .big-choice.selected { border-color: var(--primary); background: #eff6ff; }
+  .big-choice .label { font-weight: 600; font-size: 1rem; }
+  .big-choice .desc { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+  .step-num { display: inline-block; background: var(--primary); color: #fff;
+              width: 28px; height: 28px; border-radius: 50%; text-align: center;
+              line-height: 28px; font-weight: 700; margin-right: 10px; }
+  .big-icon { text-align: center; font-size: 3rem; margin-bottom: 8px; }
+</style>
+
+<div class="wizard">
+  <div class="wizard-progress">
+    <div class="step active" data-s="1"></div>
+    <div class="step" data-s="2"></div>
+    <div class="step" data-s="3"></div>
+    <div class="step" data-s="4"></div>
+    <div class="step" data-s="5"></div>
+  </div>
+
+  <form method="post" action="/firmen/neu" enctype="multipart/form-data">
+
+    <!-- SCHRITT 1: Begrüßung -->
+    <div class="wizard-step active" data-step="1">
+      <div class="card">
+        <div class="big-icon">👋</div>
+        <h2 style="text-align:center">Willkommen bei SmartRechnung!</h2>
+        <p style="text-align:center;font-size:1.05rem">
+          In wenigen Schritten richten wir deine Rechnungssoftware ein.<br>
+          Keine Sorge – du kannst später alles wieder ändern.
+        </p>
+        <div class="hint">
+          <strong>Was dich erwartet:</strong>
+          <ol style="margin:8px 0 0 20px;padding:0">
+            <li>Deine Firma / dein Name</li>
+            <li>Steuer (bist du Kleinunternehmer?)</li>
+            <li>Bankverbindung (für den QR-Zahlcode auf der Rechnung)</li>
+            <li>Rechnungsnummern-Format</li>
+            <li>Fertig – du kannst sofort Rechnungen schreiben!</li>
+          </ol>
+        </div>
+        <p class="muted" style="text-align:center;font-size:0.85rem;margin-top:16px">
+          Alle Daten bleiben auf deinem Computer. Keine Cloud, keine Anmeldung.
+        </p>
+      </div>
+      <div class="wizard-nav">
+        <span></span>
+        <button type="button" class="btn" onclick="wizNext()">Los geht's →</button>
+      </div>
+    </div>
+
+    <!-- SCHRITT 2: Firmendaten -->
+    <div class="wizard-step" data-step="2">
+      <div class="card">
+        <h2><span class="step-num">1</span>Deine Firma</h2>
+        <p class="muted">Diese Angaben stehen auf jeder Rechnung oben als Absender.</p>
+
+        <label>Anzeigename für dich (nur intern) *</label>
+        <input name="display_name" required placeholder='z.B. "Meine Firma" oder "Onkels Werkstatt"'>
+        <p class="muted" style="font-size:0.8rem">
+          Siehst nur du – oben rechts in der App, falls du mehrere Firmen verwaltest.
+        </p>
+
+        <label style="margin-top:14px">Firma oder dein voller Name *</label>
+        <input name="seller_name" required placeholder="Max Mustermann oder Mustermann GmbH">
+
+        <label style="margin-top:14px">E-Mail-Adresse *</label>
+        <input name="seller_email" required type="email" placeholder="rechnung@firma.de">
+
+        <div class="grid" style="margin-top:14px">
+          <div><label>Straße und Nummer *</label>
+            <input name="seller_street" required placeholder="Musterstraße 1"></div>
+          <div><label>Land</label>
+            <input name="seller_country" value="DE" maxlength="2"></div>
+          <div><label>PLZ *</label>
+            <input name="seller_postcode" required placeholder="12345"></div>
+          <div><label>Ort *</label>
+            <input name="seller_city" required placeholder="Musterstadt"></div>
+        </div>
+      </div>
+      <div class="wizard-nav">
+        <button type="button" class="btn btn-secondary" onclick="wizBack()">← Zurück</button>
+        <button type="button" class="btn" onclick="wizNext()">Weiter →</button>
+      </div>
+    </div>
+
+    <!-- SCHRITT 3: Steuer-Regime -->
+    <div class="wizard-step" data-step="3">
+      <div class="card">
+        <h2><span class="step-num">2</span>Umsatzsteuer</h2>
+        <p class="muted">Wähle, was auf dich zutrifft. Weißt du es nicht? Frag deinen Steuerberater
+           oder schau in deine letzte Steuererklärung.</p>
+
+        <label class="big-choice" onclick="selectChoice(this,'tax_regime','regular')">
+          <input type="radio" name="tax_regime" value="regular" checked>
+          <div class="label">📊 Regelbesteuerung</div>
+          <div class="desc">Ich berechne 19% oder 7% Umsatzsteuer auf meinen Rechnungen.
+             (Das Normale für die meisten Firmen.)</div>
+        </label>
+
+        <label class="big-choice" onclick="selectChoice(this,'tax_regime','small_business')">
+          <input type="radio" name="tax_regime" value="small_business">
+          <div class="label">🏠 Kleinunternehmer (§ 19 UStG)</div>
+          <div class="desc">Ich mache weniger als 22.000 €/Jahr Umsatz und
+             nutze die Kleinunternehmer-Regelung. Keine USt auf meinen Rechnungen.
+             SmartRechnung schreibt automatisch den richtigen Hinweis drauf.</div>
+        </label>
+
+        <label class="big-choice" onclick="selectChoice(this,'tax_regime','vat_exempt')">
+          <input type="radio" name="tax_regime" value="vat_exempt">
+          <div class="label">🏥 Umsatzsteuerbefreit</div>
+          <div class="desc">Ärzte, Heilberufe, bestimmte Bildung –
+             grundsätzlich befreit von USt.</div>
+        </label>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <p class="muted" style="font-size:0.85rem;margin-bottom:12px">
+            <strong>Steuernummer oder USt-IdNr?</strong> Mindestens eines ist Pflicht
+            auf der Rechnung (nach UStG § 14).
+          </p>
+          <div class="grid">
+            <div><label>USt-IdNr. (empfohlen)</label>
+              <input name="seller_tax_id" placeholder="DE123456789"></div>
+            <div><label>oder Steuernummer</label>
+              <input name="seller_tax_number" placeholder="12/345/67890"></div>
+          </div>
+        </div>
+      </div>
+      <div class="wizard-nav">
+        <button type="button" class="btn btn-secondary" onclick="wizBack()">← Zurück</button>
+        <button type="button" class="btn" onclick="wizNext()">Weiter →</button>
+      </div>
+    </div>
+
+    <!-- SCHRITT 4: Bank -->
+    <div class="wizard-step" data-step="4">
+      <div class="card">
+        <h2><span class="step-num">3</span>Bankverbindung</h2>
+        <p class="muted">Damit deine Kunden wissen, wohin sie das Geld überweisen sollen.
+           SmartRechnung druckt automatisch einen QR-Code auf jede Rechnung – deine Kunden
+           scannen ihn mit ihrer Banking-App und müssen nur noch bestätigen.</p>
+
+        <div class="grid">
+          <div><label>IBAN</label>
+            <input name="seller_iban" placeholder="DE89 3704 0044 0532 0130 00"></div>
+          <div><label>BIC (optional bei DE)</label>
+            <input name="seller_bic" placeholder="COBADEFFXXX"></div>
+          <div style="grid-column:1/-1"><label>Name deiner Bank</label>
+            <input name="seller_bank" placeholder="z.B. Volksbank Musterstadt"></div>
+        </div>
+
+        <div class="hint" style="margin-top:16px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0">
+            <input type="checkbox" name="qr_code_enabled" value="1" checked
+                   style="width:auto;margin:0;transform:scale(1.3)">
+            <span><strong>QR-Zahlcode auf jede Rechnung drucken</strong> (empfohlen)</span>
+          </label>
+        </div>
+
+        <p class="muted" style="font-size:0.8rem;margin-top:16px">
+          Keine Bank angegeben? Du kannst das später jederzeit in den Einstellungen nachtragen.
+          Rechnungen funktionieren auch ohne.
+        </p>
+      </div>
+      <div class="wizard-nav">
+        <button type="button" class="btn btn-secondary" onclick="wizBack()">← Zurück</button>
+        <button type="button" class="btn" onclick="wizNext()">Weiter →</button>
+      </div>
+    </div>
+
+    <!-- SCHRITT 5: Nummernkreis + Abschluss -->
+    <div class="wizard-step" data-step="5">
+      <div class="card">
+        <h2><span class="step-num">4</span>Rechnungsnummern</h2>
+        <p class="muted">Jede Rechnung braucht eine fortlaufende Nummer (Pflicht!).
+           SmartRechnung zählt automatisch hoch – du bestimmst nur das Format.</p>
+
+        <label class="big-choice" onclick="setFormat(this,'{year}-{nn:03d}',1)">
+          <div class="label">🅰️ Standard: 2026-001</div>
+          <div class="desc">Jahr und dreistellige Nummer. Fängt bei 001 an.
+             <strong>Empfohlen für die meisten.</strong></div>
+        </label>
+
+        <label class="big-choice" onclick="setFormat(this,'RE-{yy}{mm:02d}-{nn:04d}',1)">
+          <div class="label">🅱️ Mit Monat: RE-2611-0001</div>
+          <div class="desc">Monat+Jahr+fortlaufende Nummer. Gut für viele Rechnungen pro Monat.</div>
+        </label>
+
+        <label class="big-choice" onclick="setFormat(this,'{year}/{nn}',1)">
+          <div class="label">🅲 Minimal: 2026/1</div>
+          <div class="desc">So knapp wie möglich.</div>
+        </label>
+
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <label>Eigenes Format (für Fortgeschrittene)</label>
+          <input name="number_format" id="number_format" value="{year}-{nn:03d}">
+          <input type="hidden" name="next_number" id="next_number" value="1">
+          <p class="muted" style="font-size:0.8rem">
+            Platzhalter: <code>{year}</code> = 2026, <code>{yy}</code> = 26,
+            <code>{mm:02d}</code> = 11, <code>{nn:03d}</code> = 001.
+          </p>
+        </div>
+      </div>
+
+      <div class="card" style="background:#ecfdf5;border-color:#10b981">
+        <div class="big-icon">🎉</div>
+        <h2 style="text-align:center;margin:0">Fertig!</h2>
+        <p style="text-align:center">
+          Das war's. Klicke auf <strong>"Loslegen"</strong> und du landest direkt
+          auf deiner ersten Rechnung.
+        </p>
+        <p class="muted" style="text-align:center;font-size:0.85rem">
+          Alles Weitere (Logo, Farben, E-Mail-Versand, PDF-Vorlage) kannst du jederzeit
+          über <strong>Einstellungen</strong> oben in der Menüleiste anpassen.
+        </p>
+      </div>
+
+      <div class="wizard-nav">
+        <button type="button" class="btn btn-secondary" onclick="wizBack()">← Zurück</button>
+        <button type="submit" class="btn" style="background:#10b981;min-width:200px;font-size:1.1rem;padding:12px">
+          🚀 Loslegen
+        </button>
+      </div>
+    </div>
+
+  </form>
+</div>
+
+<script>
+  let wizCurr = 1;
+  const wizMax = 5;
+
+  function wizShow(n) {
+    document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+    document.querySelector('.wizard-step[data-step="' + n + '"]').classList.add('active');
+    document.querySelectorAll('.wizard-progress .step').forEach(s => {
+      const i = parseInt(s.dataset.s);
+      s.classList.remove('active','done');
+      if (i < n) s.classList.add('done');
+      if (i === n) s.classList.add('active');
+    });
+    wizCurr = n;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function wizNext() {
+    const step = document.querySelector('.wizard-step.active');
+    const required = step.querySelectorAll('input[required]');
+    for (const inp of required) {
+      if (!inp.value.trim()) {
+        inp.focus();
+        inp.style.borderColor = '#dc2626';
+        setTimeout(() => inp.style.borderColor = '', 2000);
+        return;
+      }
+    }
+    if (wizCurr < wizMax) wizShow(wizCurr + 1);
+  }
+
+  function wizBack() {
+    if (wizCurr > 1) wizShow(wizCurr - 1);
+  }
+
+  function selectChoice(label, name, value) {
+    document.querySelectorAll('.big-choice').forEach(c => {
+      if (c.querySelector(`input[name="${name}"]`)) c.classList.remove('selected');
+    });
+    label.classList.add('selected');
+    label.querySelector('input').checked = true;
+  }
+
+  function setFormat(label, fmt, next) {
+    document.getElementById('number_format').value = fmt;
+    document.getElementById('next_number').value = next;
+    document.querySelectorAll('.wizard-step[data-step="5"] .big-choice').forEach(c => c.classList.remove('selected'));
+    label.classList.add('selected');
+  }
+
+  // Erste Wahl bei Steuer-Regime markieren
+  document.addEventListener('DOMContentLoaded', () => {
+    const first = document.querySelector('.wizard-step[data-step="3"] .big-choice');
+    if (first) first.classList.add('selected');
+    const firstFormat = document.querySelector('.wizard-step[data-step="5"] .big-choice');
+    if (firstFormat) firstFormat.classList.add('selected');
+  });
+</script>
+{% endblock %}
