@@ -58,6 +58,18 @@
   .total-row td { font-weight: 700; font-size: 1.1rem; border-top: 2px solid var(--primary); }
   .pill { background: #eef2ff; color: var(--primary); padding: 2px 8px; border-radius: 999px; font-size: 0.8rem; }
   @media (max-width: 760px) { .grid, .grid-3 { grid-template-columns: 1fr; } }
+  /* Toast für Datei-Download-Bestätigungen */
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120%);
+           background: #111827; color: #fff; padding: 14px 22px; border-radius: 10px;
+           font-size: 0.95rem; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+           transition: transform 0.25s ease-out; z-index: 9999; max-width: 90%;
+           display: flex; align-items: center; gap: 14px; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast .toast-icon { font-size: 1.4rem; }
+  #toast button { background: #3B82F6; color: #fff; border: 0; padding: 6px 12px;
+                  border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  #toast button.toast-close { background: transparent; color: #9ca3af; padding: 4px 8px; }
+  .is-loading { opacity: 0.6; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -89,5 +101,70 @@
 <footer style="text-align:center;padding:20px;color:var(--muted);font-size:0.75rem">
   <a href="/ueber" style="color:var(--muted);text-decoration:none">SmartRechnung</a>
 </footer>
+
+<div id="toast" role="status" aria-live="polite">
+  <span class="toast-icon" id="toastIcon">✓</span>
+  <span id="toastMsg">OK</span>
+  <button type="button" id="toastAction" style="display:none"></button>
+  <button type="button" class="toast-close" onclick="hideToast()">✕</button>
+</div>
+
+<script>
+  // Toast-System: zeigt eine kleine Bestätigung unten, ohne die Seite zu wechseln
+  let toastTimer = null;
+  function showToast(msg, opts) {
+    opts = opts || {};
+    const t = document.getElementById('toast');
+    document.getElementById('toastIcon').textContent = opts.icon || '✓';
+    document.getElementById('toastMsg').innerHTML = msg;
+    const act = document.getElementById('toastAction');
+    if (opts.action) {
+      act.style.display = '';
+      act.textContent = opts.action.label;
+      act.onclick = opts.action.handler;
+    } else {
+      act.style.display = 'none';
+    }
+    t.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, opts.duration || 8000);
+  }
+  function hideToast() {
+    document.getElementById('toast').classList.remove('show');
+    if (toastTimer) clearTimeout(toastTimer);
+  }
+
+  // Zentrales Datei-Speichern - kopiert PDF/XML in den Downloads-Ordner und
+  // öffnet sie im System-Viewer, OHNE die aktuelle Seite zu verlassen.
+  async function saveInvoiceFile(invoiceId, format, buttonEl) {
+    if (buttonEl) buttonEl.classList.add('is-loading');
+    try {
+      const resp = await fetch(`/rechnung/${invoiceId}/speichern?format=${format}&oeffnen=true`,
+                               { method: 'POST' });
+      const data = await resp.json();
+      if (!data.ok) {
+        showToast('⚠ ' + (data.error || 'Fehler beim Speichern'), { icon: '⚠', duration: 10000 });
+        return;
+      }
+      showToast(
+        `Gespeichert: <strong>${data.filename}</strong><br>` +
+        `<span style="opacity:0.7;font-size:0.85em">in ${data.folder}</span>`,
+        {
+          duration: 10000,
+          action: {
+            label: 'Ordner öffnen',
+            handler: () => {
+              fetch(`/rechnung/${invoiceId}/ordner-oeffnen?format=${format}`, { method: 'POST' });
+            }
+          }
+        }
+      );
+    } catch (e) {
+      showToast('⚠ Netzwerkfehler: ' + e, { icon: '⚠', duration: 10000 });
+    } finally {
+      if (buttonEl) buttonEl.classList.remove('is-loading');
+    }
+  }
+</script>
 </body>
 </html>

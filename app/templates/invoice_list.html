@@ -35,8 +35,8 @@
         <td class="right">{{ '%.2f'|format(inv.gross_total) }} {{ inv.currency }}</td>
         <td>
           <a href="/rechnung/{{ inv.id }}">Details</a> ·
-          <a href="/rechnung/{{ inv.id }}/pdf">PDF</a> ·
-          <a href="/rechnung/{{ inv.id }}/xml">XML</a>
+          <a href="#" onclick="event.preventDefault();saveInvoiceFile({{ inv.id }},'pdf',this)">PDF</a> ·
+          <a href="#" onclick="event.preventDefault();saveInvoiceFile({{ inv.id }},'xml',this)">XML</a>
         </td>
       </tr>
     {% endfor %}

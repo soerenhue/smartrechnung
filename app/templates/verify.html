@@ -62,15 +62,19 @@
      speichern.</p>
 
   <p style="margin-bottom:12px">
-    <a class="btn" href="/rechnung/{{ inv.id }}/xml">
-      ⬇ XML-Datei speichern
-    </a>
+    <button type="button" class="btn"
+            onclick="saveInvoiceFile({{ inv.id }}, 'xml', this)">
+      ⬇ XML-Datei speichern &amp; öffnen
+    </button>
     <button class="btn btn-secondary" type="button" onclick="toggleXml()">
       <span id="xmlToggleText">XML-Inhalt anzeigen</span>
     </button>
     <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}">
       ← Zurück zur Rechnung
     </a>
+  </p>
+  <p class="muted" style="font-size:0.8rem">
+    Die XML wird in <strong>Downloads/SmartRechnung/</strong> gespeichert und geöffnet.
   </p>
 
   <details id="xmlDetails" style="margin-top:12px">

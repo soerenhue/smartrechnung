@@ -89,17 +89,51 @@ def _find_free_port(preferred: int = 8765) -> int:
         return s.getsockname()[1]
 
 
+_LOCK_FILE = _log_dir() / "smartrechnung.lock"
+
+
+def _acquire_startup_lock() -> bool:
+    """Lock-Datei verhindert, dass mehrere parallele Doppel-Klicks mehrere
+    Instanzen starten. Der erste Start schreibt die PID rein, weitere
+    Starts sehen die frische Lock-Datei und beenden sich sofort mit
+    einem Hinweis, dass die App gerade hochfährt.
+
+    Lock gilt als 'frisch' wenn er weniger als 60 Sekunden alt ist - nach
+    einem Crash soll die App ja wieder starten können."""
+    try:
+        if _LOCK_FILE.exists():
+            age = time.time() - _LOCK_FILE.stat().st_mtime
+            if age < 60:
+                return False
+        _LOCK_FILE.write_text(str(os.getpid()))
+        return True
+    except Exception:
+        return True  # Im Zweifel starten
+
+
+def _release_startup_lock() -> None:
+    try:
+        if _LOCK_FILE.exists():
+            _LOCK_FILE.unlink()
+    except Exception:
+        pass
+
+
 def _already_running(port: int = 8765) -> bool:
     """Prüft, ob auf dem Standard-Port schon eine SmartRechnung-Instanz
-    läuft. Wenn ja -> unsere App ist schon offen, einfach den Browser
-    aufmachen statt eine zweite Instanz zu starten."""
+    läuft. Mehrere Versuche mit kurzen Pausen, weil beim Start der Server
+    ein paar Sekunden braucht, bevor er antwortet."""
     import urllib.request
-    try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1) as r:
-            body = r.read(512).decode("utf-8", errors="ignore")
-            return "SmartRechnung" in body
-    except Exception:
-        return False
+    for _ in range(3):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1) as r:
+                body = r.read(512).decode("utf-8", errors="ignore")
+                if "SmartRechnung" in body:
+                    return True
+        except Exception:
+            pass
+        time.sleep(0.4)
+    return False
 
 
 def _wait_for_server(port: int, timeout: float = 30.0) -> bool:
@@ -151,6 +185,24 @@ def main() -> int:
             webbrowser.open("http://127.0.0.1:8765/")
             return 0
 
+        # Lock-Datei verhindert mehrere parallele Starts durch ungeduldiges
+        # Doppelklicken. Wenn ein Start läuft, beenden wir uns leise.
+        if not _acquire_startup_lock():
+            log("Startup-Lock aktiv (App fährt gerade hoch) - beende diese Instanz")
+            # Sanfter Hinweis für den User, dass seine erste Instanz noch kommt
+            try:
+                import tkinter as tk
+                root = tk.Tk(); root.withdraw()
+                from tkinter import messagebox
+                messagebox.showinfo(
+                    "SmartRechnung startet",
+                    "SmartRechnung fährt gerade hoch. "
+                    "Bitte einen Moment Geduld - das Fenster öffnet sich gleich.")
+                root.destroy()
+            except Exception:
+                pass
+            return 0
+
         port = _find_free_port()
         log(f"Freier Port: {port}")
         url = f"http://127.0.0.1:{port}/"
@@ -167,6 +219,9 @@ def main() -> int:
             return 1
 
         log(f"Server laeuft auf {url}")
+
+        # Lock freigeben, Server ist bereit - weitere Klicks finden die App
+        _release_startup_lock()
 
         try:
             import webview
@@ -202,10 +257,13 @@ def main() -> int:
     except Exception:
         tb = traceback.format_exc()
         log("STARTUP-FEHLER:\n" + tb)
+        _release_startup_lock()
         _show_error_window(
             f"SmartRechnung ist beim Start abgestuerzt.\n\n{tb}\n\nLog: {LOG_FILE}"
         )
         return 1
+    finally:
+        _release_startup_lock()
 
 
 if __name__ == "__main__":

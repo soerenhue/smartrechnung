@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import os
+import sys
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -725,14 +727,119 @@ def invoice_xml(inv_id: int, db: Session = Depends(get_db)):
     if not inv or not inv.xml_path:
         raise HTTPException(404)
     full = Path(_cfg.data_dir) / inv.xml_path
-    # application/octet-stream + Content-Disposition erzwingt Download
-    # in jedem Browser und auch im eingebetteten PyWebView-Chromium
     return FileResponse(
         full,
         media_type="application/octet-stream",
         filename=full.name,
         headers={"Content-Disposition": f'attachment; filename="{full.name}"'},
     )
+
+
+def _downloads_dir() -> Path:
+    """Downloads-Ordner des Users (OS-unabhängig) + Unterordner für SmartRechnung."""
+    if sys.platform.startswith("win"):
+        base = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Downloads"
+    else:
+        base = Path.home() / "Downloads"
+    d = base / "SmartRechnung"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _open_file_in_system(path: Path) -> None:
+    """Öffnet eine Datei im System-Default-Viewer (PDF-App, XML-Editor)."""
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", str(path)])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", str(path)])
+    except Exception:
+        pass  # Datei ist gespeichert, nur Auto-Open schlug fehl - kein Drama
+
+
+def _reveal_in_system(path: Path) -> None:
+    """Öffnet den ORDNER der Datei im System-Datei-Explorer, Datei markiert."""
+    try:
+        if sys.platform.startswith("win"):
+            import subprocess
+            subprocess.Popen(["explorer", "/select,", str(path)])
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", "-R", str(path)])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", str(path.parent)])
+    except Exception:
+        pass
+
+
+@app.post("/rechnung/{inv_id}/speichern")
+def invoice_save_to_downloads(inv_id: int, format: str = "pdf",
+                              oeffnen: bool = True,
+                              db: Session = Depends(get_db)):
+    """Kopiert PDF oder XML in den Downloads-Ordner des Users und öffnet
+    optional die Datei im System-Viewer. Gibt JSON zurück, damit die
+    Seite NICHT weg-navigiert - das löst das 'kein Zurück-Button'-Problem
+    im eingebetteten Chromium von PyWebView, das Datei-Downloads nicht
+    unterstützt und stattdessen die Datei im Fenster öffnet."""
+    import shutil
+
+    inv = db.get(Invoice, inv_id)
+    if not inv:
+        return JSONResponse({"ok": False, "error": "Rechnung nicht gefunden"}, status_code=404)
+
+    if format == "xml":
+        src_rel = inv.xml_path
+        suffix = ".xml"
+    else:
+        src_rel = inv.pdf_path
+        suffix = ".pdf"
+
+    if not src_rel:
+        return JSONResponse({"ok": False, "error": f"Keine {format.upper()}-Datei vorhanden."},
+                            status_code=404)
+
+    src = Path(_cfg.data_dir) / src_rel
+    if not src.exists():
+        return JSONResponse({"ok": False, "error": "Quelldatei fehlt auf der Festplatte."},
+                            status_code=404)
+
+    dl = _downloads_dir()
+    safe_num = inv.invoice_number.replace("/", "-").replace(" ", "_").replace("\\", "-")
+    dst = dl / f"Rechnung_{safe_num}{suffix}"
+    # Falls Datei existiert und identisch: nicht nochmal kopieren
+    try:
+        if not dst.exists() or dst.stat().st_size != src.stat().st_size:
+            shutil.copy2(src, dst)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Kopieren fehlgeschlagen: {e}"},
+                            status_code=500)
+
+    if oeffnen:
+        _open_file_in_system(dst)
+
+    return JSONResponse({"ok": True, "path": str(dst),
+                         "filename": dst.name,
+                         "folder": str(dl)})
+
+
+@app.post("/rechnung/{inv_id}/ordner-oeffnen")
+def invoice_open_folder(inv_id: int, format: str = "pdf",
+                        db: Session = Depends(get_db)):
+    """Öffnet den Ordner mit der zuletzt gespeicherten Datei im Datei-Explorer."""
+    inv = db.get(Invoice, inv_id)
+    if not inv:
+        return JSONResponse({"ok": False}, status_code=404)
+    dl = _downloads_dir()
+    safe_num = inv.invoice_number.replace("/", "-").replace(" ", "_").replace("\\", "-")
+    suffix = ".xml" if format == "xml" else ".pdf"
+    dst = dl / f"Rechnung_{safe_num}{suffix}"
+    _reveal_in_system(dst if dst.exists() else dl)
+    return JSONResponse({"ok": True})
 
 
 # --- GoBD-Export (pro Firma) ---------------------------------------------

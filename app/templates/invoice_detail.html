@@ -12,9 +12,10 @@
     einfach per E-Mail an deinen Kunden schicken; Buchhaltungsprogramme
     erkennen die Daten automatisch.
   </p>
-  <a class="btn" href="/rechnung/{{ inv.id }}/pdf" style="padding:14px 28px; font-size:1.05rem">
-    ⬇ Rechnung herunterladen
-  </a>
+  <button type="button" class="btn" style="padding:14px 28px; font-size:1.05rem"
+          onclick="saveInvoiceFile({{ inv.id }}, 'pdf', this)">
+    ⬇ Rechnung speichern &amp; öffnen
+  </button>
   <a class="btn btn-secondary" href="/neu">Nächste Rechnung schreiben</a>
 </div>
 
@@ -50,7 +51,10 @@
   </table>
 
   <p style="margin-top:20px">
-    <a class="btn" href="/rechnung/{{ inv.id }}/pdf">⬇ Rechnung herunterladen</a>
+    <button type="button" class="btn"
+            onclick="saveInvoiceFile({{ inv.id }}, 'pdf', this)">
+      ⬇ Rechnung speichern &amp; öffnen
+    </button>
     <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}/versenden">
       📧 Per E-Mail senden
     </a>
@@ -59,8 +63,9 @@
     </a>
   </p>
   <p class="muted" style="font-size:0.85rem;margin-top:6px">
-    Das XML ist schon <em>in</em> der PDF eingebettet — dein Kunde bekommt also nur
-    die PDF und hat damit alles. Zum separaten XML-Download auf "E-Rechnung prüfen" klicken.
+    Deine Rechnung wird im Ordner <strong>Downloads/SmartRechnung/</strong> gespeichert und
+    automatisch im Standard-PDF-Programm geöffnet. Das XML ist in der PDF
+    eingebettet — dein Kunde bekommt also nur die PDF und hat alles.
   </p>
 
   <details style="margin-top:16px">
