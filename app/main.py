@@ -130,6 +130,11 @@ async def unexpected_err(request: Request, exc: Exception):
 
 
 # --- Startseite / Weiche --------------------------------------------------
+@app.get("/ueber")
+def about_page(request: Request):
+    return _render(request, "about.html", {"version": "1.0"})
+
+
 @app.get("/")
 def index(request: Request, db: Session = Depends(get_db)):
     companies = list_companies()

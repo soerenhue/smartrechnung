@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Über SmartRechnung{% endblock %}
+{% block content %}
+<div class="card" style="max-width:700px;margin:40px auto;text-align:center">
+  <div style="font-size:3rem;margin-bottom:8px">📄</div>
+  <h1 style="margin-top:0">SmartRechnung</h1>
+  <p class="muted">Freie, selbst gebaute E-Rechnungs-Software für Deutschland.<br>
+     Erstellt rechtskonforme Rechnungen nach EN 16931 (ZUGFeRD / Factur-X),
+     empfängt und archiviert eingehende E-Rechnungen und verschickt sie
+     direkt per E-Mail.</p>
+
+  <p style="margin-top:28px">
+    <strong>Version:</strong> {{ version }}<br>
+    <strong>Made with Kaffee &amp; Linux von</strong>
+    <a href="https://github.com/soerenhue" style="color:var(--primary);text-decoration:none">
+      Sören Hülsemeyer
+    </a><br>
+    <strong>Für:</strong> Freunde, Familie und alle, die sich keine 20 €/Monat
+    für Rechnungssoftware zahlen wollen 💛
+  </p>
+
+  <p style="margin-top:28px;font-size:0.85rem">
+    <a class="btn btn-secondary" href="https://github.com/soerenhue/smartrechnung">
+      Quellcode auf GitHub
+    </a>
+    <a class="btn btn-secondary" href="/">
+      Zurück
+    </a>
+  </p>
+
+  <p class="muted" style="margin-top:32px;font-size:0.75rem;line-height:1.6">
+    SmartRechnung ist Open Source und wird dir kostenlos zur Verfügung gestellt.
+    Keine Werbung, kein Abo, keine Cloud, keine Nutzerdaten verlassen deinen Rechner.<br>
+    Für die Richtigkeit deiner Rechnungen bist du selbst verantwortlich -
+    im Zweifel frag deinen Steuerberater.
+  </p>
+</div>
+{% endblock %}

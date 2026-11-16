@@ -1,4 +1,10 @@
 <!doctype html>
+<!--
+  SmartRechnung - Freies E-Rechnungs-Werkzeug
+  Made with coffee by Sören Hülsemeyer in Deutschland.
+  Wenn du das hier liest, hast du in den Quelltext geschaut. Respekt.
+  Open Source: https://github.com/soerenhue/smartrechnung
+-->
 <html lang="de">
 <head>
 <meta charset="utf-8">
@@ -57,7 +63,8 @@
 <body>
 <header>
   <div class="brand">
-    SmartRechnung
+    <a href="/ueber" style="color:#fff;text-decoration:none"
+       title="Über SmartRechnung">SmartRechnung</a>
     {% if active %}<span class="pill" style="background:rgba(255,255,255,0.2);color:#fff">{{ active.display_name }}</span>{% endif %}
   </div>
   <div class="right">
@@ -82,8 +89,7 @@
 </header>
 <main>{% block content %}{% endblock %}</main>
 <footer style="text-align:center;padding:20px;color:var(--muted);font-size:0.75rem">
-  SmartRechnung &middot; Made by Sören Hülsemeyer &middot;
-  <a href="https://github.com/soerenhue/smartrechnung" style="color:var(--muted)">Open Source</a>
+  <a href="/ueber" style="color:var(--muted);text-decoration:none">SmartRechnung</a>
 </footer>
 </body>
 </html>

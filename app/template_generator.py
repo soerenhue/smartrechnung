@@ -177,12 +177,6 @@ _TEMPLATE = r"""<!doctype html>
     </div>
   </div>
 
-  <div style="position: absolute; bottom: 2mm; left: 0; right: 0;
-              text-align: center; font-size: 6pt; color: %MUTED_COLOR%;
-              opacity: 0.75">
-    Erstellt mit SmartRechnung &middot; Made by Sören Hülsemeyer
-  </div>
-
 </div>
 
 </body>

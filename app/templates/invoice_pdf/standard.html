@@ -38,9 +38,6 @@
   .page-footer { position: fixed; bottom: 8mm; left: 18mm; right: 18mm;
                  text-align: center; font-size: 8pt;
                  color: {{ branding.muted_color }}; border-top: 0.3mm solid #e5e7eb; padding-top: 2mm; }
-  .app-signature { position: fixed; bottom: 2mm; left: 0; right: 0;
-                   text-align: center; font-size: 6pt;
-                   color: {{ branding.muted_color }}; opacity: 0.75; }
   .page-footer div { line-height: 1.3; }
 </style>
 </head>
@@ -51,7 +48,6 @@
   {% if branding.footer_line_2 %}<div>{{ branding.footer_line_2 }}</div>{% endif %}
   {% if branding.footer_line_3 %}<div>{{ branding.footer_line_3 }}</div>{% endif %}
 </div>
-<div class="app-signature">Erstellt mit SmartRechnung &middot; Made by Sören Hülsemeyer</div>
 
 <div class="header">
   <div class="seller">
