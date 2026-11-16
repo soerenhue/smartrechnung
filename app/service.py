@@ -162,10 +162,37 @@ def _maybe_make_qr(inv: Invoice, company: Company) -> None:
         inv.qr_code_filename = filename
 
 
+def _try_render_from_pdf_template(inv: Invoice, company: Company) -> bytes | None:
+    """Versucht, die Rechnung direkt auf die hochgeladene Original-PDF-Vorlage
+    zu rendern (pixel-perfekt). Gibt bytes zurück, wenn erfolgreich,
+    sonst None - dann fällt der Aufrufer auf HTML-Rendering zurück."""
+    template_path = company.assets_dir / "vorlage-original.pdf"
+    if not template_path.exists():
+        return None
+    try:
+        from .pdf_template_renderer import render_invoice_pdf_from_template
+    except Exception:
+        return None
+    try:
+        template_bytes = template_path.read_bytes()
+        qr_png = None
+        if inv.qr_code_filename:
+            qr_path = company.assets_dir / inv.qr_code_filename
+            if qr_path.exists():
+                qr_png = qr_path.read_bytes()
+        return render_invoice_pdf_from_template(template_bytes, inv, qr_png)
+    except Exception:
+        return None
+
+
 def create_invoice(db: Session, data: InvoiceIn, company: Company) -> Invoice:
     inv = _build_invoice_entity(data, company)
     _maybe_make_qr(inv, company)
-    pdf_bytes = render_invoice_pdf(inv, company)
+    # Erst 1:1-Vorlagen-Renderer versuchen (falls Firma eine PDF-Vorlage
+    # hochgeladen hat), sonst Standard-HTML→PDF.
+    pdf_bytes = _try_render_from_pdf_template(inv, company)
+    if pdf_bytes is None:
+        pdf_bytes = render_invoice_pdf(inv, company)
     return _finalize(db, inv, company, pdf_bytes)
 
 

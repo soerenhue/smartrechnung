@@ -317,27 +317,27 @@ async def template_wizard_save(slug: str, request: Request):
         return _err_page(request, "PDF-Analyse fehlgeschlagen",
                          f"Konnte das Layout nicht ermitteln: {e}", 400)
 
-    # Logo + Farben + Schriftart aus der Vorlage übernehmen.
-    # KEINE Overlay-Template-Generierung mehr - das führte zu Mischmasch,
-    # weil die Overlay-Boxen oft nicht perfekt zu den Rahmen der Vorlage
-    # passten und das Original-Logo mit "Test"-Dummy-Daten vermischt
-    # wurde. Jetzt: saubere Standard-Rechnung mit DEN Farben, DER Schrift
-    # und DEM Logo der Vorlage. Konsistent, lesbar, druckbar.
+    # Original-PDF SELBST speichern - der PyMuPDF-Renderer nutzt sie
+    # als Basis, schreibt neue Daten direkt an die erkannten Positionen
+    # drauf und erhält Logo, Rahmen, Hintergrund 1:1.
+    (c.assets_dir / "vorlage-original.pdf").write_bytes(pdf_bytes)
+
     logo_filename = save_logo(layout, c.assets_dir, name_stem="logo-imported")
 
     br = load_branding(c)
-    br["template"] = "standard.html"  # bewährtes Layout
+    br["template"] = "standard.html"  # Fallback, falls Vorlagen-Renderer passt
     br["primary_color"] = layout.primary_color
     br["accent_color"] = layout.accent_color
     br["text_color"] = layout.text_color
     br["font_family"] = f'"{layout.font_family}", DejaVu Sans, sans-serif'
+    br["use_pdf_template"] = True  # Vorlage für PyMuPDF-Renderer verfügbar
     if logo_filename:
         br["logo_filename"] = logo_filename
     save_branding(c, br)
 
     return _render(request, "template_wizard.html",
                    {"company": c, "layout": layout, "saved": True,
-                    "template_name": "standard.html"})
+                    "template_name": "Vorlage 1:1"})
 
 
 @app.post("/firmen/{slug}/löschen")
