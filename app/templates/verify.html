@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}E-Rechnung prüfen{% endblock %}
 {% block content %}
-<p><a href="/rechnung/{{ inv.id }}">&larr; Zurück zur Rechnung</a></p>
+
+<p style="margin-bottom:16px">
+  <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}">&larr; Zurück zur Rechnung</a>
+</p>
 
 <div class="card">
   <h1>Prüfung: Ist das eine gültige E-Rechnung?</h1>
@@ -9,9 +12,10 @@
   {% if verify.is_valid %}
   <div style="background:#ecfdf5;border:1px solid #10b981;border-radius:8px;
               padding:20px;margin-bottom:16px">
-    <div style="font-size:1.5rem">✅ Ja – gültige E-Rechnung</div>
-    <p style="margin:6px 0">Diese Datei ist eine echte E-Rechnung nach EN 16931.
-       Dein Kunde kann sie in seinem Buchhaltungssystem direkt einlesen.</p>
+    <div style="font-size:1.5rem">✅ Ja – gültige E-Rechnung nach EN 16931</div>
+    <p style="margin:6px 0">Diese PDF-Datei ist eine echte hybride E-Rechnung.
+       Dein Kunde kann sie in jedem Buchhaltungssystem (DATEV, lexoffice, sevDesk,
+       SAP, Taxpool, ...) direkt einlesen – die Daten werden automatisch erkannt.</p>
   </div>
   {% else %}
   <div style="background:#fee2e2;border:1px solid #dc2626;border-radius:8px;
@@ -23,35 +27,90 @@
   </div>
   {% endif %}
 
-  <h3>Woran erkennt man das?</h3>
+  <h3>Was die Maschine liest</h3>
+  <p class="muted" style="font-size:0.9rem">Das sind die Daten, die ein
+     Buchhaltungssystem beim Einlesen deiner PDF herauszieht:</p>
   <table>
-    <tr><th>Herkunft der XML</th><td>
+    <tr><th>Herkunft</th><td>
       {% if verify.source_kind == 'pdf-hybrid' %}
         <strong>In der PDF eingebettet</strong> – Hybrid-Format
-        (ZUGFeRD / Factur-X). Perfekt.
+        (ZUGFeRD / Factur-X) ✓
       {% elif verify.source_kind == 'xml-pure' %}
         Reine XML-Datei (XRechnung-Stil)
       {% elif verify.source_kind == 'pdf-no-xml' %}
-        <strong>Nur PDF ohne eingebettetes XML</strong> – das ist KEINE E-Rechnung!
-      {% else %}
-        Unbekannt
-      {% endif %}
+        <strong>Nur PDF ohne XML</strong> – keine E-Rechnung!
+      {% else %}Unbekannt{% endif %}
     </td></tr>
     <tr><th>Format-Profil</th><td><code>{{ verify.format_profile or '—' }}</code></td></tr>
     <tr><th>Rechnungsnummer</th><td>{{ verify.invoice_number or '—' }}</td></tr>
     <tr><th>Rechnungsdatum</th><td>{{ verify.issue_date or '—' }}</td></tr>
     <tr><th>Absender</th><td>{{ verify.seller_name or '—' }}</td></tr>
     <tr><th>Empfänger</th><td>{{ verify.buyer_name or '—' }}</td></tr>
-    <tr><th>Gesamtbetrag</th><td>{{ verify.gross_total or '—' }} {{ verify.currency }}</td></tr>
+    <tr><th>Nettobetrag</th><td>{{ verify.net_total }} {{ verify.currency }}</td></tr>
+    <tr><th>USt-Betrag</th><td>{{ verify.tax_total }} {{ verify.currency }}</td></tr>
+    <tr><th>Gesamtbetrag</th><td><strong>{{ verify.gross_total }} {{ verify.currency }}</strong></td></tr>
     <tr><th>IBAN</th><td>{{ verify.iban or '—' }}</td></tr>
   </table>
+</div>
 
-  <p class="muted" style="margin-top:20px;font-size:0.85rem">
-    <strong>Was heißt das?</strong> Eine E-Rechnung muss ein strukturiertes XML
-    nach EN 16931 enthalten. Bei ZUGFeRD / Factur-X steckt dieses XML
-    <em>in</em> der PDF-Datei und ist für Menschen unsichtbar — aber
-    Buchhaltungsprogramme lesen es automatisch aus. Die Software, die
-    dein Kunde benutzt, erkennt sofort: hier ist eine echte E-Rechnung.
+{% if pretty_xml %}
+<div class="card">
+  <h3 style="margin-top:0">Die echte XML-E-Rechnung</h3>
+  <p class="muted">Das ist der maschinenlesbare Teil, der in deiner PDF steckt.
+     Normalerweise sieht niemand das – aber zum Weitergeben an Steuerberater
+     oder zum Prüfen durch die Finanzbehörde kannst du sie hier als Datei
+     speichern.</p>
+
+  <p style="margin-bottom:12px">
+    <a class="btn" href="/rechnung/{{ inv.id }}/xml">
+      ⬇ XML-Datei speichern
+    </a>
+    <button class="btn btn-secondary" type="button" onclick="toggleXml()">
+      <span id="xmlToggleText">XML-Inhalt anzeigen</span>
+    </button>
+    <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}">
+      ← Zurück zur Rechnung
+    </a>
+  </p>
+
+  <details id="xmlDetails" style="margin-top:12px">
+    <summary style="display:none"></summary>
+    <div style="background:#f3f4f6;border:1px solid var(--border);border-radius:6px;
+                padding:12px;overflow:auto;max-height:500px">
+      <pre style="margin:0;font-size:0.75rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word">{{ pretty_xml }}</pre>
+    </div>
+    <p class="muted" style="font-size:0.8rem;margin-top:8px">
+      Namespace <code>urn:cen.eu:en16931:2017</code> am Anfang bestätigt:
+      Dies ist eine EN-16931-konforme E-Rechnung.
+    </p>
+  </details>
+</div>
+
+<script>
+  function toggleXml() {
+    const d = document.getElementById('xmlDetails');
+    const t = document.getElementById('xmlToggleText');
+    if (d.open) { d.open = false; t.textContent = 'XML-Inhalt anzeigen'; }
+    else { d.open = true; t.textContent = 'XML-Inhalt verbergen'; }
+  }
+</script>
+{% endif %}
+
+<div class="card">
+  <h3 style="margin-top:0">Was heißt „E-Rechnung" überhaupt?</h3>
+  <p style="font-size:0.95rem;line-height:1.6">
+    Eine E-Rechnung ist eine Rechnung, deren Daten <strong>von einem Programm
+    automatisch gelesen werden können</strong>, ohne dass ein Mensch etwas abtippt.
+    Dafür schreibt das Gesetz (Wachstumschancengesetz, seit 2025) ein strukturiertes
+    Format nach der Europäischen Norm <strong>EN 16931</strong> vor.
+  </p>
+  <p style="font-size:0.95rem;line-height:1.6">
+    SmartRechnung nutzt das Format <strong>ZUGFeRD / Factur-X</strong>: Du bekommst
+    eine ganz normale PDF, die du lesen kannst wie jede andere – aber zusätzlich
+    steckt die gleiche Information nochmal als XML <em>innen in der PDF</em> drin.
+    Dein Kunde sieht nur die PDF. Sein Buchhaltungssystem liest automatisch das XML.
+    Beide Welten in einer Datei. 🎯
   </p>
 </div>
+
 {% endblock %}

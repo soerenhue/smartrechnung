@@ -551,7 +551,21 @@ def invoice_verify(inv_id: int, request: Request, db: Session = Depends(get_db))
     except Exception:
         raise HTTPException(500, "PDF-Datei kann nicht gelesen werden.")
     result = einvoice_reader.read_einvoice(pdf_bytes)
-    return _render(request, "verify.html", {"inv": inv, "verify": result})
+
+    # XML hübsch formatieren für die Vorschau (mit Einrückung)
+    pretty_xml = ""
+    if result.xml_bytes:
+        try:
+            from lxml import etree as _et
+            parsed = _et.fromstring(result.xml_bytes)
+            pretty_xml = _et.tostring(parsed, pretty_print=True,
+                                      encoding="unicode", xml_declaration=False)
+            pretty_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + pretty_xml
+        except Exception:
+            pretty_xml = result.xml_bytes.decode("utf-8", errors="replace")
+
+    return _render(request, "verify.html",
+                   {"inv": inv, "verify": result, "pretty_xml": pretty_xml})
 
 
 @app.get("/rechnung/{inv_id}/versenden")
@@ -711,11 +725,11 @@ def invoice_xml(inv_id: int, db: Session = Depends(get_db)):
     if not inv or not inv.xml_path:
         raise HTTPException(404)
     full = Path(_cfg.data_dir) / inv.xml_path
-    # Content-Disposition: attachment erzwingt Download statt
-    # Anzeige im Browser-Fenster
+    # application/octet-stream + Content-Disposition erzwingt Download
+    # in jedem Browser und auch im eingebetteten PyWebView-Chromium
     return FileResponse(
         full,
-        media_type="application/xml",
+        media_type="application/octet-stream",
         filename=full.name,
         headers={"Content-Disposition": f'attachment; filename="{full.name}"'},
     )

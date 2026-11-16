@@ -106,6 +106,13 @@ def build_xml(inv: Invoice) -> bytes:
         <ram:RateApplicablePercent>{_fmt(grp['rate'])}</ram:RateApplicablePercent>
       </ram:ApplicableTradeTax>""")
 
+    # BT-10 BuyerReference ist PFLICHT nach EN 16931 (Business Rule BR-DE-15).
+    # Wenn der Nutzer keine Referenz eingetragen hat, verwenden wir die
+    # Rechnungsnummer als Fallback - nie leer lassen, sonst ist die XML
+    # formal unvollständig und Validierer melden Fehler.
+    buyer_ref = inv.buyer_reference or inv.invoice_number
+    cur = escape(inv.currency)
+
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice
   xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
@@ -127,7 +134,7 @@ def build_xml(inv: Invoice) -> bytes:
   <rsm:SupplyChainTradeTransaction>
     {''.join(items_xml)}
     <ram:ApplicableHeaderTradeAgreement>
-      {f'<ram:BuyerReference>{escape(inv.buyer_reference)}</ram:BuyerReference>' if inv.buyer_reference else ''}
+      <ram:BuyerReference>{escape(buyer_ref)}</ram:BuyerReference>
       <ram:SellerTradeParty>
         <ram:Name>{escape(inv.seller_name)}</ram:Name>
         <ram:PostalTradeAddress>
@@ -181,7 +188,7 @@ def build_xml(inv: Invoice) -> bytes:
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
         <ram:LineTotalAmount>{_fmt(inv.net_total)}</ram:LineTotalAmount>
         <ram:TaxBasisTotalAmount>{_fmt(inv.net_total)}</ram:TaxBasisTotalAmount>
-        <ram:TaxTotalAmount currencyID="{escape(inv.currency)}">{_fmt(inv.tax_total)}</ram:TaxTotalAmount>
+        <ram:TaxTotalAmount currencyID="{cur}">{_fmt(inv.tax_total)}</ram:TaxTotalAmount>
         <ram:GrandTotalAmount>{_fmt(inv.gross_total)}</ram:GrandTotalAmount>
         <ram:DuePayableAmount>{_fmt(inv.gross_total)}</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
