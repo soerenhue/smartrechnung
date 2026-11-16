@@ -132,14 +132,42 @@ def analyze_pdf(pdf_bytes: bytes) -> ExtractedLayout:
         page_w = layout.page_width_pt = page.rect.width
         page_h = layout.page_height_pt = page.rect.height
 
-        # --- Hintergrundbild: 300 DPI (Druckqualität) ---
+        # --- Hintergrundbild: 300 DPI, OHNE die alten Textdaten ---
+        # Erst alle Textbereiche mit Redaction-Annotationen markieren,
+        # dann apply_redactions() entfernt den Text und ersetzt ihn durch
+        # die Hintergrundfarbe an dieser Stelle (sampling). Dadurch bleibt
+        # das Design (Logo, Rahmen, Flächen, Fußzeile) exakt erhalten,
+        # aber die alten Rechnungsdaten sind weg. Die neuen Daten können
+        # dann ohne weiße Overlay-Boxen draufgeschrieben werden.
         try:
+            for block in page.get_text("dict").get("blocks", []):
+                if block.get("type") != 0:
+                    continue
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        bbox = span.get("bbox")
+                        if bbox and (bbox[2] - bbox[0]) > 0:
+                            rect = fitz.Rect(bbox)
+                            # Logo-Text bleibt erhalten (ganz oben rechts/links
+                            # wo häufig der Firmenname steht und mit zum Logo gehört)
+                            if rect.y0 < page_h * 0.12:
+                                continue
+                            page.add_redact_annot(rect, fill=None)
+            page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+
             zoom = 300 / 72
             mat = fitz.Matrix(zoom, zoom)
             pix = page.get_pixmap(matrix=mat, alpha=False)
             layout.background_png = pix.tobytes("png")
         except Exception:
-            pass
+            # Fallback: Ohne Redaction, einfach rendern
+            try:
+                zoom = 300 / 72
+                mat = fitz.Matrix(zoom, zoom)
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+                layout.background_png = pix.tobytes("png")
+            except Exception:
+                pass
 
         # --- Logo: größtes Bild im oberen Drittel ---
         try:

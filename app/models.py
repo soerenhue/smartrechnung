@@ -131,6 +131,37 @@ class Customer(Base):
     use_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class IncomingInvoice(Base):
+    """Eingehende E-Rechnung (vom Kunden/Lieferanten empfangen). Wird
+    GoBD-konform archiviert. Die XML wird gespeichert, geparst und die
+    extrahierten Felder bleiben in der DB für Suche/Übersicht."""
+
+    __tablename__ = "incoming_invoices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_slug: Mapped[str] = mapped_column(String(128), index=True, default="")
+
+    source_kind: Mapped[str] = mapped_column(String(32), default="")  # pdf-hybrid | xml-pure
+    format_profile: Mapped[str] = mapped_column(String(128), default="")
+    is_valid: Mapped[bool] = mapped_column(default=False)
+    issues: Mapped[str] = mapped_column(Text, default="")
+
+    invoice_number: Mapped[str] = mapped_column(String(64), default="")
+    issue_date_str: Mapped[str] = mapped_column(String(32), default="")
+    seller_name: Mapped[str] = mapped_column(String(255), default="")
+    buyer_name: Mapped[str] = mapped_column(String(255), default="")
+    currency: Mapped[str] = mapped_column(String(3), default="EUR")
+    net_total: Mapped[str] = mapped_column(String(32), default="")
+    tax_total: Mapped[str] = mapped_column(String(32), default="")
+    gross_total: Mapped[str] = mapped_column(String(32), default="")
+    iban: Mapped[str] = mapped_column(String(34), default="")
+
+    original_filename: Mapped[str] = mapped_column(String(255), default="")
+    pdf_path: Mapped[str] = mapped_column(String(512), default="")
+    xml_path: Mapped[str] = mapped_column(String(512), default="")
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class AuditLog(Base):
     """Append-only Log aller relevanten Ereignisse (GoBD: Nachvollziehbarkeit)."""
 

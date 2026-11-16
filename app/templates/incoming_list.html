@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Eingangsrechnungen{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Eingangsrechnungen</h1>
+  <p class="muted">Hier landen E-Rechnungen, die dir zugeschickt werden.
+     Lade sie hoch und die App extrahiert automatisch Absender, Nummer,
+     Beträge usw. aus der eingebetteten XML. Die Dateien werden
+     GoBD-konform archiviert.</p>
+  <p><a class="btn" href="/eingang/neu">+ Eingangsrechnung hochladen</a></p>
+
+  {% if rows %}
+  <table>
+    <thead><tr>
+      <th>Erhalten am</th><th>Absender</th><th>Nummer</th><th>Datum</th>
+      <th class="right">Betrag</th><th>Format</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.received_at.strftime('%d.%m.%Y %H:%M') }}</td>
+      <td>{{ r.seller_name or r.original_filename }}</td>
+      <td><a href="/eingang/{{ r.id }}">{{ r.invoice_number or 'Details' }}</a></td>
+      <td>{{ r.issue_date_str }}</td>
+      <td class="right">{{ r.gross_total }} {{ r.currency }}</td>
+      <td style="font-size:0.85rem">
+        {% if r.source_kind == 'pdf-hybrid' %}PDF+XML{% elif r.source_kind == 'xml-pure' %}XML{% else %}{{ r.source_kind }}{% endif %}
+      </td>
+      <td>
+        {% if r.is_valid %}<span class="ok">✓ gültig</span>
+        {% else %}<span class="warn">prüfen</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="margin-top:20px">Noch keine Eingangsrechnungen archiviert.</p>
+  {% endif %}
+</div>
+{% endblock %}

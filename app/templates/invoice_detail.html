@@ -51,8 +51,14 @@
 
   <p style="margin-top:20px">
     <a class="btn" href="/rechnung/{{ inv.id }}/pdf">Rechnung herunterladen</a>
+    <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}/versenden">
+      📧 Per E-Mail senden
+    </a>
+    <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}/verifizieren">
+      🔍 E-Rechnung prüfen
+    </a>
     <a class="btn btn-secondary" href="/rechnung/{{ inv.id }}/xml" download>
-      Nur das XML (für technisch Interessierte)
+      Nur XML
     </a>
   </p>
   <p class="muted" style="font-size:0.85rem;margin-top:6px">

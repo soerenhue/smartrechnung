@@ -71,7 +71,7 @@
     </div>
 
     <div style="margin-top:14px;background:#f0f9ff;padding:10px 14px;border-radius:6px;border-left:3px solid #3b82f6">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0" id="smtp">
         <input type="checkbox" name="qr_code_enabled" value="1"
                {% if (company and company.qr_code_enabled) or not company %}checked{% endif %}
                style="width:auto;margin:0">
@@ -106,6 +106,44 @@
   </div>
 
 {% if company %}
+  <div class="card" id="smtp-settings">
+    <h2 style="margin-top:0">E-Mail-Versand (SMTP)</h2>
+    <p class="muted">Wenn du Rechnungen direkt aus der App per E-Mail verschicken willst,
+       trage hier die Zugangsdaten deines Mail-Anbieters ein.
+       Gmail: <code>smtp.gmail.com</code> Port 587 (App-Passwort nötig).
+       Outlook: <code>smtp.office365.com</code> Port 587.
+       GMX/Web.de: <code>mail.gmx.net</code> Port 587.
+       IONOS: <code>smtp.ionos.de</code> Port 587.</p>
+    <div class="grid">
+      <div><label>SMTP-Server</label>
+        <input name="smtp_host" value="{{ company.smtp_host }}" placeholder="smtp.gmail.com"></div>
+      <div><label>Port</label>
+        <input type="number" name="smtp_port" value="{{ company.smtp_port or 587 }}"></div>
+      <div><label>Benutzer / E-Mail-Adresse</label>
+        <input name="smtp_user" value="{{ company.smtp_user }}" placeholder="du@domain.de"></div>
+      <div><label>Passwort (bei Gmail: App-Passwort)</label>
+        <input type="password" name="smtp_pass" value="{{ company.smtp_pass }}"></div>
+      <div><label>Absender-Name</label>
+        <input name="smtp_from_name" value="{{ company.smtp_from_name }}"
+               placeholder="z.B. Max Mustermann GmbH"></div>
+      <div><label>Verschlüsselung</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:8px">
+          <input type="checkbox" name="smtp_use_tls" value="1"
+                 {% if company.smtp_use_tls %}checked{% endif %} style="width:auto;margin:0">
+          <span>STARTTLS verwenden (empfohlen für Port 587)</span>
+        </label></div>
+    </div>
+
+    <label style="margin-top:12px">Betreffs-Vorlage</label>
+    <input name="email_subject_tpl" value="{{ company.email_subject_tpl }}">
+    <label>Nachrichten-Vorlage</label>
+    <textarea name="email_body_tpl" rows="7">{{ company.email_body_tpl }}</textarea>
+    <p class="muted" style="font-size:0.8rem">
+      Platzhalter: <code>{number}</code>, <code>{date}</code>, <code>{amount}</code>,
+      <code>{sender}</code>, <code>{buyer}</code>.
+    </p>
+  </div>
+
   <div class="card" style="background:#f0f9ff;border-color:#60a5fa">
     <h2 style="margin-top:0">5. Rechnungsvorlage aus bestehender PDF importieren</h2>
     <p class="muted">Du hast schon eine Rechnung in deinem Wunsch-Layout? Lade sie als PDF hoch -

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Eingangsrechnung hochladen{% endblock %}
+{% block content %}
+<p><a href="/eingang">&larr; Zurück</a></p>
+<div class="card">
+  <h1>Eingangsrechnung hochladen</h1>
+  <p class="muted">Lad eine erhaltene E-Rechnung hoch. Die App erkennt automatisch
+     das Format (ZUGFeRD-Hybrid-PDF oder reine XRechnung-XML), zieht die Felder raus
+     und archiviert die Datei. Ab 2025 müssen inländische Unternehmen
+     E-Rechnungen empfangen können – das ist genau das.</p>
+
+  <form method="post" enctype="multipart/form-data">
+    <label>Datei (PDF oder XML)</label>
+    <input type="file" name="file" accept=".pdf,.xml,application/pdf,application/xml" required>
+    <p style="margin-top:18px">
+      <button class="btn" type="submit">Hochladen und auswerten</button>
+    </p>
+  </form>
+</div>
+{% endblock %}

@@ -66,6 +66,22 @@ DEFAULT_SELLER = {
     # EPC-QR-Code ("Giro-Code") auf jede Rechnung drucken.
     # Banking-Apps scannen ihn und fuellen die Ueberweisung automatisch aus.
     "qr_code_enabled": True,
+    # SMTP für direkten E-Mail-Versand von Rechnungen
+    "smtp_host": "",
+    "smtp_port": 587,
+    "smtp_user": "",
+    "smtp_pass": "",
+    "smtp_use_tls": True,
+    "smtp_from_name": "",
+    "email_subject_tpl": "Rechnung {number} von {sender}",
+    "email_body_tpl": (
+        "Hallo,\n\n"
+        "anbei die Rechnung {number} vom {date} über {amount}.\n"
+        "Die Datei ist eine E-Rechnung nach EN 16931 (ZUGFeRD) - "
+        "sie enthält die Daten sowohl als lesbares PDF als auch als "
+        "maschinenlesbares XML.\n\n"
+        "Viele Grüße\n{sender}"
+    ),
 }
 
 

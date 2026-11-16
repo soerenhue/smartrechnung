@@ -56,11 +56,13 @@ _TEMPLATE = r"""<!doctype html>
     background-position: 0 0;
   }
 
-  /* Weißer Overlay deckt die alten Rechnungsdaten des Originals ab */
+  /* Overlay ist transparent - das Original wurde vor dem Rendern bereits
+     von alten Textdaten befreit (Redaction in pdf_analyzer). Dadurch
+     bleiben farbige Flächen/Logos/Rahmen aus dem Original sichtbar. */
   .overlay {
     position: absolute;
-    background: white;
     padding: 1mm;
+    background: transparent;
   }
   /* Textcontent in den Overlays - scharfer Vektortext */
   .overlay .content {
@@ -173,6 +175,12 @@ _TEMPLATE = r"""<!doctype html>
       </div>
       {% endif %}
     </div>
+  </div>
+
+  <div style="position: absolute; bottom: 2mm; left: 0; right: 0;
+              text-align: center; font-size: 6pt; color: %MUTED_COLOR%;
+              opacity: 0.75">
+    Erstellt mit SmartRechnung &middot; Made by Sören Hülsemeyer
   </div>
 
 </div>

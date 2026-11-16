@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Eingangsrechnung{% endblock %}
+{% block content %}
+<p><a href="/eingang">&larr; Alle Eingangsrechnungen</a></p>
+
+<div class="card">
+  <h1>Eingangsrechnung</h1>
+
+  {% if rec.is_valid %}
+  <div style="background:#ecfdf5;border-left:4px solid #10b981;padding:12px 16px;border-radius:4px;margin-bottom:16px">
+    ✓ Gültige E-Rechnung ({{ rec.format_profile or rec.source_kind }})
+  </div>
+  {% else %}
+  <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:4px;margin-bottom:16px">
+    ⚠ Nicht vollständig erkannt – prüfe manuell. Details:
+    <pre style="margin:6px 0 0 0;white-space:pre-wrap">{{ rec.issues }}</pre>
+  </div>
+  {% endif %}
+
+  <table>
+    <tr><th>Absender</th><td>{{ rec.seller_name or '—' }}</td></tr>
+    <tr><th>Rechnungsnummer</th><td>{{ rec.invoice_number or '—' }}</td></tr>
+    <tr><th>Datum</th><td>{{ rec.issue_date_str or '—' }}</td></tr>
+    <tr><th>Empfänger</th><td>{{ rec.buyer_name or '—' }}</td></tr>
+    <tr><th>Netto</th><td>{{ rec.net_total }} {{ rec.currency }}</td></tr>
+    <tr><th>USt</th><td>{{ rec.tax_total }} {{ rec.currency }}</td></tr>
+    <tr><th>Gesamt</th><td><strong>{{ rec.gross_total }} {{ rec.currency }}</strong></td></tr>
+    <tr><th>IBAN</th><td>{{ rec.iban or '—' }}</td></tr>
+    <tr><th>Erhalten am</th><td>{{ rec.received_at.strftime('%d.%m.%Y %H:%M') }}</td></tr>
+    <tr><th>Datei</th><td>{{ rec.original_filename }}</td></tr>
+  </table>
+
+  <p style="margin-top:20px">
+    {% if rec.pdf_path %}<a class="btn" href="/eingang/{{ rec.id }}/datei?which=pdf">PDF herunterladen</a>{% endif %}
+    {% if rec.xml_path %}<a class="btn btn-secondary" href="/eingang/{{ rec.id }}/datei?which=xml">XML herunterladen</a>{% endif %}
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}E-Rechnung prüfen{% endblock %}
+{% block content %}
+<p><a href="/rechnung/{{ inv.id }}">&larr; Zurück zur Rechnung</a></p>
+
+<div class="card">
+  <h1>Prüfung: Ist das eine gültige E-Rechnung?</h1>
+
+  {% if verify.is_valid %}
+  <div style="background:#ecfdf5;border:1px solid #10b981;border-radius:8px;
+              padding:20px;margin-bottom:16px">
+    <div style="font-size:1.5rem">✅ Ja – gültige E-Rechnung</div>
+    <p style="margin:6px 0">Diese Datei ist eine echte E-Rechnung nach EN 16931.
+       Dein Kunde kann sie in seinem Buchhaltungssystem direkt einlesen.</p>
+  </div>
+  {% else %}
+  <div style="background:#fee2e2;border:1px solid #dc2626;border-radius:8px;
+              padding:20px;margin-bottom:16px">
+    <div style="font-size:1.5rem">❌ Noch nicht vollständig</div>
+    <p style="margin:6px 0">
+      {% for issue in verify.issues %}<div>{{ issue }}</div>{% endfor %}
+    </p>
+  </div>
+  {% endif %}
+
+  <h3>Woran erkennt man das?</h3>
+  <table>
+    <tr><th>Herkunft der XML</th><td>
+      {% if verify.source_kind == 'pdf-hybrid' %}
+        <strong>In der PDF eingebettet</strong> – Hybrid-Format
+        (ZUGFeRD / Factur-X). Perfekt.
+      {% elif verify.source_kind == 'xml-pure' %}
+        Reine XML-Datei (XRechnung-Stil)
+      {% elif verify.source_kind == 'pdf-no-xml' %}
+        <strong>Nur PDF ohne eingebettetes XML</strong> – das ist KEINE E-Rechnung!
+      {% else %}
+        Unbekannt
+      {% endif %}
+    </td></tr>
+    <tr><th>Format-Profil</th><td><code>{{ verify.format_profile or '—' }}</code></td></tr>
+    <tr><th>Rechnungsnummer</th><td>{{ verify.invoice_number or '—' }}</td></tr>
+    <tr><th>Rechnungsdatum</th><td>{{ verify.issue_date or '—' }}</td></tr>
+    <tr><th>Absender</th><td>{{ verify.seller_name or '—' }}</td></tr>
+    <tr><th>Empfänger</th><td>{{ verify.buyer_name or '—' }}</td></tr>
+    <tr><th>Gesamtbetrag</th><td>{{ verify.gross_total or '—' }} {{ verify.currency }}</td></tr>
+    <tr><th>IBAN</th><td>{{ verify.iban or '—' }}</td></tr>
+  </table>
+
+  <p class="muted" style="margin-top:20px;font-size:0.85rem">
+    <strong>Was heißt das?</strong> Eine E-Rechnung muss ein strukturiertes XML
+    nach EN 16931 enthalten. Bei ZUGFeRD / Factur-X steckt dieses XML
+    <em>in</em> der PDF-Datei und ist für Menschen unsichtbar — aber
+    Buchhaltungsprogramme lesen es automatisch aus. Die Software, die
+    dein Kunde benutzt, erkennt sofort: hier ist eine echte E-Rechnung.
+  </p>
+</div>
+{% endblock %}

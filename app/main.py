@@ -25,7 +25,9 @@ from .config import (
 from .pdf_analyzer import analyze_pdf, save_background, save_logo
 from .template_generator import generate_template
 from .db import Base, engine, get_db
-from .models import Customer, Invoice
+from . import einvoice_reader
+from . import mailer
+from .models import Customer, IncomingInvoice, Invoice
 from .schemas import InvoiceIn, InvoiceItemIn
 from .service import (
     InvoiceNumberTakenError, SellerNotConfiguredError,
@@ -225,6 +227,14 @@ async def company_edit_save(slug: str, request: Request):
         "tax_regime": form.get("tax_regime") or "regular",
         "reverse_charge_default": bool(form.get("reverse_charge_default")),
         "qr_code_enabled": bool(form.get("qr_code_enabled")),
+        "smtp_host": form.get("smtp_host") or "",
+        "smtp_port": form.get("smtp_port") or 587,
+        "smtp_user": form.get("smtp_user") or "",
+        "smtp_pass": form.get("smtp_pass") or "",
+        "smtp_use_tls": bool(form.get("smtp_use_tls")),
+        "smtp_from_name": form.get("smtp_from_name") or "",
+        "email_subject_tpl": form.get("email_subject_tpl") or "",
+        "email_body_tpl": form.get("email_body_tpl") or "",
     })
 
     # Branding speichern
@@ -503,6 +513,173 @@ def invoice_pdf(inv_id: int, db: Session = Depends(get_db)):
         filename=full.name,
         headers={"Content-Disposition": f'attachment; filename="{full.name}"'},
     )
+
+
+@app.get("/rechnung/{inv_id}/verifizieren")
+def invoice_verify(inv_id: int, request: Request, db: Session = Depends(get_db)):
+    """Zeigt, ob die PDF wirklich eine E-Rechnung ist: extrahiert die XML
+    und parst sie, damit der User sieht was wirklich drin ist."""
+    inv = db.get(Invoice, inv_id)
+    if not inv or not inv.pdf_path:
+        raise HTTPException(404)
+    pdf_path = Path(_cfg.data_dir) / inv.pdf_path
+    try:
+        pdf_bytes = pdf_path.read_bytes()
+    except Exception:
+        raise HTTPException(500, "PDF-Datei kann nicht gelesen werden.")
+    result = einvoice_reader.read_einvoice(pdf_bytes)
+    return _render(request, "verify.html", {"inv": inv, "verify": result})
+
+
+@app.get("/rechnung/{inv_id}/versenden")
+def invoice_send_form(inv_id: int, request: Request, db: Session = Depends(get_db)):
+    inv = db.get(Invoice, inv_id)
+    if not inv:
+        raise HTTPException(404)
+    c = active_company(request)
+    return _render(request, "send_email.html",
+                   {"inv": inv, "company": c,
+                    "smtp_configured": bool(getattr(c, "smtp_host", "") and getattr(c, "smtp_user", ""))})
+
+
+@app.post("/rechnung/{inv_id}/versenden")
+async def invoice_send(inv_id: int, request: Request, db: Session = Depends(get_db)):
+    inv = db.get(Invoice, inv_id)
+    if not inv:
+        raise HTTPException(404)
+    c = active_company(request)
+    if not c:
+        raise HTTPException(400, "Keine Firma ausgewählt.")
+
+    form = await request.form()
+    to_email = (form.get("to_email") or "").strip()
+    mode = form.get("mode", "pdf")  # pdf | xml | both
+    subject = (form.get("subject") or "").strip() or None
+    body = (form.get("body") or "").strip() or None
+
+    attach_pdf = mode in ("pdf", "both")
+    attach_xml = mode in ("xml", "both")
+
+    try:
+        mailer.send_invoice(inv, c, Path(_cfg.data_dir), to_email,
+                            attach_pdf=attach_pdf,
+                            attach_xml_separately=attach_xml,
+                            custom_subject=subject, custom_body=body)
+    except mailer.SmtpNotConfiguredError as e:
+        return _err_page(request, "SMTP nicht eingerichtet",
+                         str(e) + " Klicke oben auf 'Firmen' → 'Bearbeiten' → "
+                         "scroll nach unten zu 'E-Mail-Versand'.", 400)
+    except Exception as e:
+        return _err_page(request, "E-Mail-Versand fehlgeschlagen",
+                         f"{type(e).__name__}: {e}", 400)
+
+    return _render(request, "send_email.html",
+                   {"inv": inv, "company": c, "sent_to": to_email,
+                    "smtp_configured": True})
+
+
+@app.get("/eingang")
+def incoming_list(request: Request, db: Session = Depends(get_db)):
+    c = active_company(request)
+    if not c:
+        return RedirectResponse("/", status_code=303)
+    rows = (db.query(IncomingInvoice)
+            .filter(IncomingInvoice.company_slug == c.slug)
+            .order_by(IncomingInvoice.received_at.desc())
+            .all())
+    return _render(request, "incoming_list.html", {"rows": rows})
+
+
+@app.get("/eingang/neu")
+def incoming_upload_form(request: Request):
+    return _render(request, "incoming_upload.html", {})
+
+
+@app.post("/eingang/neu")
+async def incoming_upload(request: Request, db: Session = Depends(get_db)):
+    c = active_company(request)
+    if not c:
+        raise HTTPException(400, "Keine Firma ausgewählt.")
+
+    form = await request.form()
+    upload = form.get("file")
+    if not hasattr(upload, "filename") or not upload.filename:
+        return _err_page(request, "Keine Datei ausgewählt",
+                         "Bitte eine PDF- oder XML-Datei hochladen.", 400)
+    raw = await upload.read()
+    result = einvoice_reader.read_einvoice(raw)
+
+    # Archiv-Pfade
+    inbox_dir = c.dir / "eingang"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    safe_stem = (result.invoice_number or Path(upload.filename).stem
+                 ).replace("/", "-").replace(" ", "_")
+
+    pdf_rel = ""
+    xml_rel = ""
+    if result.source_kind == "pdf-hybrid":
+        pdf_file = inbox_dir / f"{safe_stem}.pdf"
+        pdf_file.write_bytes(raw)
+        pdf_rel = str(pdf_file.relative_to(_cfg.data_dir))
+        if result.xml_bytes:
+            xml_file = inbox_dir / f"{safe_stem}.xml"
+            xml_file.write_bytes(result.xml_bytes)
+            xml_rel = str(xml_file.relative_to(_cfg.data_dir))
+    elif result.source_kind == "xml-pure":
+        xml_file = inbox_dir / f"{safe_stem}.xml"
+        xml_file.write_bytes(raw)
+        xml_rel = str(xml_file.relative_to(_cfg.data_dir))
+    else:
+        # Unbekannt - trotzdem archivieren als Rohdatei
+        raw_file = inbox_dir / Path(upload.filename).name
+        raw_file.write_bytes(raw)
+        pdf_rel = str(raw_file.relative_to(_cfg.data_dir))
+
+    rec = IncomingInvoice(
+        company_slug=c.slug,
+        source_kind=result.source_kind,
+        format_profile=result.format_profile,
+        is_valid=result.is_valid,
+        issues="\n".join(result.issues),
+        invoice_number=result.invoice_number,
+        issue_date_str=result.issue_date,
+        seller_name=result.seller_name,
+        buyer_name=result.buyer_name,
+        currency=result.currency,
+        net_total=result.net_total,
+        tax_total=result.tax_total,
+        gross_total=result.gross_total,
+        iban=result.iban,
+        original_filename=upload.filename,
+        pdf_path=pdf_rel, xml_path=xml_rel,
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return RedirectResponse(f"/eingang/{rec.id}", status_code=303)
+
+
+@app.get("/eingang/{rid}")
+def incoming_detail(rid: int, request: Request, db: Session = Depends(get_db)):
+    rec = db.get(IncomingInvoice, rid)
+    if not rec:
+        raise HTTPException(404)
+    return _render(request, "incoming_detail.html", {"rec": rec})
+
+
+@app.get("/eingang/{rid}/datei")
+def incoming_file(rid: int, which: str = "pdf", db: Session = Depends(get_db)):
+    rec = db.get(IncomingInvoice, rid)
+    if not rec:
+        raise HTTPException(404)
+    rel = rec.pdf_path if which == "pdf" else rec.xml_path
+    if not rel:
+        raise HTTPException(404)
+    full = Path(_cfg.data_dir) / rel
+    mt = "application/pdf" if which == "pdf" else "application/xml"
+    return FileResponse(
+        full, media_type=mt, filename=full.name,
+        headers={"Content-Disposition": f'attachment; filename="{full.name}"'})
 
 
 @app.get("/rechnung/{inv_id}/xml")

@@ -71,8 +71,9 @@
       </form>
     {% endif %}
     <nav>
-      <a href="/">Rechnungen</a>
+      <a href="/">Ausgang</a>
       <a href="/neu">Neue Rechnung</a>
+      <a href="/eingang">Eingang</a>
       <a href="/kunden">Kunden</a>
       <a href="/firmen">Firmen</a>
       <a href="/export/gobd">GoBD-Export</a>
@@ -80,5 +81,9 @@
   </div>
 </header>
 <main>{% block content %}{% endblock %}</main>
+<footer style="text-align:center;padding:20px;color:var(--muted);font-size:0.75rem">
+  SmartRechnung &middot; Made by Sören Hülsemeyer &middot;
+  <a href="https://github.com/soerenhue/smartrechnung" style="color:var(--muted)">Open Source</a>
+</footer>
 </body>
 </html>
