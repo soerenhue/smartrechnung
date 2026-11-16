@@ -14,7 +14,7 @@ jobs:
           - os: windows-latest
             artifact: SmartRechnung-Windows.zip
             archive: "pwsh -Command Compress-Archive -Path dist/* -DestinationPath SmartRechnung-Windows.zip"
-          - os: macos-latest
+          - os: macos-13
             artifact: SmartRechnung-macOS.zip
             archive: "cd dist && zip -ry ../SmartRechnung-macOS.zip ."
           - os: ubuntu-latest
