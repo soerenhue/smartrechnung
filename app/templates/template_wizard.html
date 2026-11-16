@@ -3,18 +3,21 @@
 {% block content %}
 
 <div class="card">
-  <h1>Rechnungsvorlage aus deiner bestehenden PDF-Rechnung bauen</h1>
+  <h1>Dein Rechnungs-Look aus einer bestehenden PDF übernehmen</h1>
   <p class="muted">
-    Lad eine bestehende PDF-Rechnung hoch - die App analysiert Logo, Farben,
-    Schriftart und Layout und baut daraus eine Vorlage, die alle zukünftigen
-    Rechnungen in genau diesem Stil erzeugt.
+    Lad eine bestehende PDF-Rechnung hoch – die App zieht daraus dein
+    <strong>Logo</strong>, deine <strong>Farben</strong> und deine
+    <strong>Schriftart</strong> und verwendet sie für alle neuen Rechnungen.
   </p>
-  <p class="muted" style="background:#fffbea;padding:10px;border-left:3px solid #f59e0b;border-radius:4px">
-    <strong>Hinweis:</strong> Die Analyse ist eine Annäherung, keine Pixel-perfekte Kopie.
-    Bei üblichen Rechnungs-Layouts (Logo oben, Positionen in der Mitte,
-    Summen unten) funktioniert sie sehr gut. Bei sehr außergewoehnlichem
-    Design kannst du die generierte HTML-Vorlage danach manuell nachjustieren
-    (sie liegt in <code>{{ company.templates_dir }}</code>).
+  <p class="muted" style="background:#eff6ff;padding:12px 14px;border-left:3px solid #3b82f6;border-radius:4px">
+    <strong>Wie es funktioniert:</strong> Wir verwenden ein bewährtes, rechtlich
+    einwandfreies Rechnungs-Layout und übernehmen nur die visuellen Elemente
+    deiner Vorlage – nicht das exakte Layout.<br>
+    <strong>Warum?</strong> Jede Rechnung sieht so garantiert gut aus,
+    ist auf jedem Drucker lesbar und bleibt rechtskonform.
+    Ein echtes Pixel-perfektes Nachbauen jeder beliebigen fremden Vorlage
+    ist unzuverlässig und hat in Tests immer wieder Fehlplatzierungen
+    produziert.
   </p>
 
   {% if not saved %}
@@ -22,12 +25,8 @@
     <label>Deine bestehende Rechnung (als PDF)</label>
     <input type="file" name="pdf_file" accept="application/pdf" required>
 
-    <label style="margin-top:14px">Name für die neue Vorlage</label>
-    <input type="text" name="template_name" value="meine-vorlage.html">
-    <p class="muted">Datei wird gespeichert als <code>{{ company.templates_dir }}/[Name].html</code></p>
-
     <p style="margin-top:18px">
-      <button class="btn" type="submit">Analysieren und Vorlage erstellen</button>
+      <button class="btn" type="submit">Design übernehmen</button>
       <a class="btn btn-secondary" href="/firmen/{{ company.slug }}">Abbrechen</a>
     </p>
   </form>
@@ -35,9 +34,10 @@
 
   {% if saved and layout %}
   <div style="background:#ecfdf5;border:1px solid #10b981;border-radius:8px;padding:16px;margin-top:16px">
-    <h2 style="margin-top:0;color:#065f46">&#10003; Vorlage erstellt: <code>{{ template_name }}</code></h2>
-    <p>Sie ist jetzt als aktive Vorlage für <strong>{{ company.display_name }}</strong> gesetzt.
-       Alle neuen Rechnungen für diese Firma werden in diesem Stil generiert.</p>
+    <h2 style="margin-top:0;color:#065f46">✓ Design übernommen</h2>
+    <p>Die visuellen Merkmale deiner Vorlage sind jetzt für
+       <strong>{{ company.display_name }}</strong> aktiv.
+       Alle neuen Rechnungen für diese Firma werden in deinem Stil erzeugt.</p>
 
     <h3>Was ich erkannt habe</h3>
     <table style="font-size:0.9rem">

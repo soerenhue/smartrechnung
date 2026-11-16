@@ -106,6 +106,24 @@
   </div>
 
 {% if company %}
+  <div class="card" id="save-folder">
+    <h2 style="margin-top:0">Speicherort für Rechnungen</h2>
+    <p class="muted">Wenn du auf "⬇ Rechnung speichern &amp; öffnen" klickst,
+       landen die PDF- und XML-Dateien in diesem Ordner.
+       Leer lassen = Standard-Downloads-Ordner wird verwendet.</p>
+    <label>Ordner-Pfad</label>
+    <input name="save_folder" value="{{ company.save_folder }}"
+           placeholder="z.B. /Users/name/Documents/Rechnungen oder C:\Users\name\Rechnungen\2026">
+    <p class="muted" style="font-size:0.8rem">
+      Beispiele:<br>
+      macOS: <code>/Users/{{ company.slug }}/Documents/Rechnungen</code><br>
+      Windows: <code>C:\Users\{{ company.slug }}\Documents\Rechnungen</code><br>
+      Linux: <code>/home/{{ company.slug }}/Rechnungen</code><br>
+      <code>~</code> wird automatisch zum Benutzer-Verzeichnis erweitert. Falls der
+      Ordner nicht existiert, wird er beim ersten Speichern angelegt.
+    </p>
+  </div>
+
   <div class="card" id="smtp-settings">
     <h2 style="margin-top:0">E-Mail-Versand (SMTP)</h2>
     <p class="muted">Wenn du Rechnungen direkt aus der App per E-Mail verschicken willst,

@@ -260,6 +260,7 @@ async def company_edit_save(slug: str, request: Request):
         "smtp_from_name": form.get("smtp_from_name") or "",
         "email_subject_tpl": form.get("email_subject_tpl") or "",
         "email_body_tpl": form.get("email_body_tpl") or "",
+        "save_folder": (form.get("save_folder") or "").strip(),
     })
 
     # Branding speichern
@@ -316,23 +317,16 @@ async def template_wizard_save(slug: str, request: Request):
         return _err_page(request, "PDF-Analyse fehlgeschlagen",
                          f"Konnte das Layout nicht ermitteln: {e}", 400)
 
-    # Logo + 300-DPI-Hintergrundbild der Originalvorlage speichern
+    # Logo + Farben + Schriftart aus der Vorlage übernehmen.
+    # KEINE Overlay-Template-Generierung mehr - das führte zu Mischmasch,
+    # weil die Overlay-Boxen oft nicht perfekt zu den Rahmen der Vorlage
+    # passten und das Original-Logo mit "Test"-Dummy-Daten vermischt
+    # wurde. Jetzt: saubere Standard-Rechnung mit DEN Farben, DER Schrift
+    # und DEM Logo der Vorlage. Konsistent, lesbar, druckbar.
     logo_filename = save_logo(layout, c.assets_dir, name_stem="logo-imported")
-    save_background(layout, c.assets_dir, name_stem="vorlage-hintergrund")
 
-    # Overlay-Vorlage: Original als Hintergrund + weiße Boxen + scharfer
-    # neuer Text an den erkannten Positionen
-    html = generate_template(layout)
-    template_name = form.get("template_name") or "importiert.html"
-    if not template_name.endswith(".html"):
-        template_name += ".html"
-    # Sicherheit: nur Dateinamen, keine Pfade
-    template_name = Path(template_name).name
-    (c.templates_dir / template_name).write_text(html, encoding="utf-8")
-
-    # Branding aktualisieren: neue Vorlage aktiv + Farben uebernehmen
     br = load_branding(c)
-    br["template"] = template_name
+    br["template"] = "standard.html"  # bewährtes Layout
     br["primary_color"] = layout.primary_color
     br["accent_color"] = layout.accent_color
     br["text_color"] = layout.text_color
@@ -343,7 +337,7 @@ async def template_wizard_save(slug: str, request: Request):
 
     return _render(request, "template_wizard.html",
                    {"company": c, "layout": layout, "saved": True,
-                    "template_name": template_name})
+                    "template_name": "standard.html"})
 
 
 @app.post("/firmen/{slug}/löschen")
@@ -735,8 +729,23 @@ def invoice_xml(inv_id: int, db: Session = Depends(get_db)):
     )
 
 
-def _downloads_dir() -> Path:
-    """Downloads-Ordner des Users (OS-unabhängig) + Unterordner für SmartRechnung."""
+def _downloads_dir(company=None) -> Path:
+    """Ordner für heruntergeladene Rechnungen. Wenn die Firma einen
+    eigenen Speicher-Ordner konfiguriert hat, wird der verwendet.
+    Sonst Fallback auf ~/Downloads/SmartRechnung/."""
+    if company is not None:
+        custom = getattr(company, "save_folder", "") or ""
+        if custom.strip():
+            try:
+                p = Path(custom).expanduser()
+                p.mkdir(parents=True, exist_ok=True)
+                # Testschreibrechte
+                test = p / ".write_test"
+                test.touch()
+                test.unlink()
+                return p
+            except Exception:
+                pass  # ungültig/schreibgeschützt → Fallback
     if sys.platform.startswith("win"):
         base = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Downloads"
     else:
@@ -808,7 +817,8 @@ def invoice_save_to_downloads(inv_id: int, format: str = "pdf",
         return JSONResponse({"ok": False, "error": "Quelldatei fehlt auf der Festplatte."},
                             status_code=404)
 
-    dl = _downloads_dir()
+    c = get_company(inv.company_slug) if inv.company_slug else None
+    dl = _downloads_dir(c)
     safe_num = inv.invoice_number.replace("/", "-").replace(" ", "_").replace("\\", "-")
     dst = dl / f"Rechnung_{safe_num}{suffix}"
     # Falls Datei existiert und identisch: nicht nochmal kopieren
@@ -834,7 +844,8 @@ def invoice_open_folder(inv_id: int, format: str = "pdf",
     inv = db.get(Invoice, inv_id)
     if not inv:
         return JSONResponse({"ok": False}, status_code=404)
-    dl = _downloads_dir()
+    c = get_company(inv.company_slug) if inv.company_slug else None
+    dl = _downloads_dir(c)
     safe_num = inv.invoice_number.replace("/", "-").replace(" ", "_").replace("\\", "-")
     suffix = ".xml" if format == "xml" else ".pdf"
     dst = dl / f"Rechnung_{safe_num}{suffix}"

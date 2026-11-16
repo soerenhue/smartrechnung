@@ -82,6 +82,9 @@ DEFAULT_SELLER = {
         "maschinenlesbares XML.\n\n"
         "Viele Grüße\n{sender}"
     ),
+    # Ordner, in den heruntergeladene Rechnungen gespeichert werden.
+    # Leer → ~/Downloads/SmartRechnung/ (Standard)
+    "save_folder": "",
 }
 
 

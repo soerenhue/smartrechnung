@@ -70,6 +70,17 @@
     {% endif %}
   </a>
 
+  <a class="settings-tile" href="/firmen/{{ active.slug }}#save-folder">
+    <div class="icon">📁</div>
+    <h3>Speicherort</h3>
+    <p>Wohin PDF und XML beim "Speichern" gelegt werden</p>
+    {% if active.save_folder %}
+      <div class="status ok" style="word-break:break-all">✓ {{ active.save_folder }}</div>
+    {% else %}
+      <div class="status">Standard: Downloads/SmartRechnung/</div>
+    {% endif %}
+  </a>
+
   <a class="settings-tile" href="/firmen/{{ active.slug }}/vorlage-aus-pdf">
     <div class="icon">📄</div>
     <h3>Vorlage aus PDF</h3>
