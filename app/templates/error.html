@@ -1,18 +1,50 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="card" style="text-align:center; padding: 40px 20px">
-  <div style="font-size: 3rem">⚠️</div>
-  <h1>{{ title }}</h1>
-  <p class="muted" style="max-width: 540px; margin: 12px auto 24px">{{ message }}</p>
+<div class="card" style="max-width:760px;margin:20px auto">
+  <div style="text-align:center">
+    <div style="font-size: 3rem">⚠️</div>
+    <h1 style="margin:10px 0 4px">{{ title }}</h1>
+    <p class="muted" style="margin: 4px auto 20px">{{ message }}</p>
+  </div>
+
   {% if issues %}
-  <ul style="text-align:left; max-width:540px; margin: 0 auto 24px; color:#b91c1c">
-    {% for i in issues %}<li>{{ i }}</li>{% endfor %}
-  </ul>
+  <div style="background:#fef2f2;border:1px solid #fca5a5;border-left:5px solid #dc2626;
+              border-radius:8px;padding:16px;margin:10px 0 20px">
+    <h3 style="margin:0 0 10px;color:#991b1b">
+      Diese {{ issues|length }} Punkt{{ 'e' if issues|length != 1 }} fehl{{ 'en' if issues|length != 1 else 't' }} noch:
+    </h3>
+    <ol style="margin:0;padding-left:24px;color:#991b1b">
+      {% for i in issues %}
+      <li style="margin:8px 0;line-height:1.55">
+        {% set parts = i.split(':', 1) %}
+        {% if parts|length == 2 %}
+          <code style="background:#fee2e2;padding:1px 6px;border-radius:3px;font-size:0.8rem;color:#7f1d1d">{{ parts[0]|trim }}</code>
+          <span style="color:#450a0a">{{ parts[1]|trim }}</span>
+        {% else %}
+          {{ i }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+
+  <div style="background:#f0f9ff;border-left:4px solid #3b82f6;padding:12px 16px;
+              border-radius:4px;font-size:0.9rem;margin-bottom:20px">
+    <strong>Warum diese Prüfung?</strong><br>
+    SmartRechnung prüft jede Rechnung vor dem Erstellen gegen die EU-Norm
+    <strong>EN 16931</strong>, die deutschen Zusatzregeln (BR-DE) und
+    <strong>§ 14 UStG</strong>. Das ist der gleiche Prüfumfang, den auch
+    DATEV, lexoffice und die offizielle KoSIT-Validierung verwenden.
+    So landet nie eine kaputte Rechnung bei deinem Kunden.
+  </div>
   {% endif %}
-  <p>
-    <a class="btn btn-secondary" href="javascript:history.back()">Zurück und korrigieren</a>
-    <a class="btn" href="/">Zur Rechnungsliste</a>
-  </p>
+
+  <div style="text-align:center">
+    <button type="button" class="btn" onclick="history.back()">
+      ← Zurück und korrigieren
+    </button>
+    <a class="btn btn-secondary" href="/">Zur Rechnungsliste</a>
+  </div>
 </div>
 {% endblock %}
