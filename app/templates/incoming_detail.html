@@ -5,17 +5,13 @@
 
 <div class="card">
   <h1>Eingangsrechnung</h1>
+  <p class="muted">Format: {{ rec.format_profile or rec.source_kind }}</p>
+</div>
 
-  {% if rec.is_valid %}
-  <div style="background:#ecfdf5;border-left:4px solid #10b981;padding:12px 16px;border-radius:4px;margin-bottom:16px">
-    ✓ Gültige E-Rechnung ({{ rec.format_profile or rec.source_kind }})
-  </div>
-  {% else %}
-  <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:4px;margin-bottom:16px">
-    ⚠ Nicht vollständig erkannt – prüfe manuell. Details:
-    <pre style="margin:6px 0 0 0;white-space:pre-wrap">{{ rec.issues }}</pre>
-  </div>
-  {% endif %}
+{% include "_validation_report.html" %}
+
+<div class="card">
+  <h2 style="margin-top:0">Erkannte Daten</h2>
 
   <table>
     <tr><th>Absender</th><td>{{ rec.seller_name or '—' }}</td></tr>
@@ -35,4 +31,16 @@
     {% if rec.xml_path %}<a class="btn btn-secondary" href="/eingang/{{ rec.id }}/datei?which=xml">XML herunterladen</a>{% endif %}
   </p>
 </div>
+
+{% if pretty_xml %}
+<div class="card">
+  <h3 style="margin-top:0">XML-Inhalt</h3>
+  <details>
+    <summary style="cursor:pointer;color:var(--muted)">Vollständiges XML anzeigen</summary>
+    <div style="background:#f3f4f6;border-radius:6px;padding:12px;overflow:auto;max-height:500px;margin-top:10px">
+      <pre style="margin:0;font-size:0.75rem;white-space:pre-wrap;word-break:break-word">{{ pretty_xml }}</pre>
+    </div>
+  </details>
+</div>
+{% endif %}
 {% endblock %}

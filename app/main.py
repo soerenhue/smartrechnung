@@ -28,6 +28,7 @@ from .pdf_analyzer import analyze_pdf, save_background, save_logo
 from .template_generator import generate_template
 from .db import Base, engine, get_db
 from . import einvoice_reader
+from . import einvoice_validator
 from . import mailer
 from .models import Customer, IncomingInvoice, Invoice
 from .schemas import InvoiceIn, InvoiceItemIn
@@ -550,6 +551,7 @@ def invoice_verify(inv_id: int, request: Request, db: Session = Depends(get_db))
 
     # XML hübsch formatieren für die Vorschau (mit Einrückung)
     pretty_xml = ""
+    validation = None
     if result.xml_bytes:
         try:
             from lxml import etree as _et
@@ -560,8 +562,14 @@ def invoice_verify(inv_id: int, request: Request, db: Session = Depends(get_db))
         except Exception:
             pretty_xml = result.xml_bytes.decode("utf-8", errors="replace")
 
+        # Volle EN-16931-Validierung durchführen
+        pdf_a3 = einvoice_validator.check_pdf_a3(pdf_bytes)
+        validation = einvoice_validator.validate_einvoice_xml(
+            result.xml_bytes, source_kind=result.source_kind, pdf_a3=pdf_a3)
+
     return _render(request, "verify.html",
-                   {"inv": inv, "verify": result, "pretty_xml": pretty_xml})
+                   {"inv": inv, "verify": result, "pretty_xml": pretty_xml,
+                    "validation": validation})
 
 
 @app.get("/rechnung/{inv_id}/versenden")
@@ -697,7 +705,37 @@ def incoming_detail(rid: int, request: Request, db: Session = Depends(get_db)):
     rec = db.get(IncomingInvoice, rid)
     if not rec:
         raise HTTPException(404)
-    return _render(request, "incoming_detail.html", {"rec": rec})
+
+    # Volle EN-16931-Validierung on-the-fly
+    validation = None
+    pretty_xml = ""
+    xml_bytes = None
+    pdf_a3 = None
+    if rec.xml_path:
+        try:
+            xml_bytes = (Path(_cfg.data_dir) / rec.xml_path).read_bytes()
+        except Exception:
+            pass
+    if rec.pdf_path:
+        try:
+            pdf_bytes = (Path(_cfg.data_dir) / rec.pdf_path).read_bytes()
+            pdf_a3 = einvoice_validator.check_pdf_a3(pdf_bytes)
+        except Exception:
+            pass
+    if xml_bytes:
+        try:
+            from lxml import etree as _et
+            parsed = _et.fromstring(xml_bytes)
+            pretty_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + _et.tostring(
+                parsed, pretty_print=True, encoding="unicode", xml_declaration=False)
+        except Exception:
+            pretty_xml = xml_bytes.decode("utf-8", errors="replace")
+        validation = einvoice_validator.validate_einvoice_xml(
+            xml_bytes, source_kind=rec.source_kind, pdf_a3=pdf_a3)
+
+    return _render(request, "incoming_detail.html",
+                   {"rec": rec, "validation": validation,
+                    "pretty_xml": pretty_xml})
 
 
 @app.get("/eingang/{rid}/datei")

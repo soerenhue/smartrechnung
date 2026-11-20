@@ -1,0 +1,84 @@
+{# Wiederverwendbarer Validation-Report für Eingangs- und Ausgangsrechnungen.
+   Erwartet in context: validation (ValidationReport) #}
+{% if validation %}
+<div class="card">
+  <h2 style="margin-top:0">Rechtliche Prüfung nach EN 16931</h2>
+  <p class="muted" style="font-size:0.9rem">
+    Dies ist der gleiche Prüfumfang, den auch Buchhaltungssysteme wie DATEV,
+    lexoffice und die offizielle KoSIT-Validierung des Bundes verwenden:
+    EU-Norm EN 16931 + deutsche Zusatzregeln (BR-DE) + Konsistenz (BR-CO)
+    + Pflichten nach § 14 UStG.
+  </p>
+
+  <div class="vr-summary {{ 'valid' if validation.is_valid else 'invalid' }}">
+    <div class="headline">
+      {% if validation.is_valid %}
+        ✅ Gültige E-Rechnung
+      {% else %}
+        ❌ Rechnung erfüllt nicht alle Pflichtfelder
+      {% endif %}
+    </div>
+    <div style="margin-top:6px">
+      <span class="vr-chip ok">{{ validation.passed|length }} bestanden</span>
+      {% if validation.warnings %}
+        <span class="vr-chip warn">{{ validation.warnings|length }} Warnung{{ 'en' if validation.warnings|length != 1 }}</span>
+      {% endif %}
+      {% if validation.errors %}
+        <span class="vr-chip error">{{ validation.errors|length }} Fehler</span>
+      {% endif %}
+    </div>
+    {% if not validation.is_valid %}
+    <p style="margin:8px 0 0;font-size:0.9rem">
+      Die rot markierten Punkte unten müssen behoben werden, damit die
+      Rechnung von professionellen Buchhaltungssystemen akzeptiert wird.
+    </p>
+    {% endif %}
+  </div>
+
+  {% if validation.errors %}
+  <h3 style="color:#991b1b;margin-top:20px">❌ Fehler ({{ validation.errors|length }})</h3>
+  <ul class="vr-list">
+    {% for r in validation.errors %}
+    <li class="error">
+      <span class="vr-icon">❌</span>
+      <div style="flex:1">
+        <span class="vr-rule">{{ r.rule }}</span><strong>{{ r.title }}</strong>
+        {% if r.detail %}<div class="vr-detail">{{ r.detail }}</div>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if validation.warnings %}
+  <h3 style="color:#92400e;margin-top:20px">⚠ Warnungen ({{ validation.warnings|length }})</h3>
+  <ul class="vr-list">
+    {% for r in validation.warnings %}
+    <li class="warn">
+      <span class="vr-icon">⚠</span>
+      <div style="flex:1">
+        <span class="vr-rule">{{ r.rule }}</span><strong>{{ r.title }}</strong>
+        {% if r.detail %}<div class="vr-detail">{{ r.detail }}</div>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <details style="margin-top:20px">
+    <summary style="cursor:pointer;color:var(--muted);font-size:0.9rem">
+      Alle {{ validation.passed|length }} bestandenen Prüfungen anzeigen
+    </summary>
+    <ul class="vr-list" style="margin-top:12px">
+      {% for r in validation.passed %}
+      <li class="ok">
+        <span class="vr-icon">✓</span>
+        <div style="flex:1">
+          <span class="vr-rule">{{ r.rule }}</span>{{ r.title }}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+</div>
+{% endif %}
