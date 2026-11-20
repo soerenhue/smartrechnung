@@ -18,6 +18,14 @@
         ❌ Rechnung erfüllt nicht alle Pflichtfelder
       {% endif %}
     </div>
+    {% if validation.is_valid %}
+    <p style="margin:8px 0 0;font-size:0.85rem">
+      <a href="https://portal3.gefeg.com/invoice/validation" target="_blank" rel="noopener"
+         style="color:#065f46;text-decoration:underline">
+        Zusätzlich beim offiziellen KoSIT-/XRechnung-Validator prüfen →
+      </a>
+    </p>
+    {% endif %}
     <div style="margin-top:6px">
       <span class="vr-chip ok">{{ validation.passed|length }} bestanden</span>
       {% if validation.warnings %}

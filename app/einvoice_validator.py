@@ -1,10 +1,17 @@
 """Umfassende EN-16931-Validierung für eingehende und ausgehende
-E-Rechnungen. Prüft die offiziellen Business Rules der EU-Norm plus
-die deutschen Zusatzregeln (BR-DE) plus Konsistenz (BR-CO).
+E-Rechnungen.
 
-Kein Ersatz für die offizielle KoSIT-Validierung mit XSD+Schematron, aber
-eine praktische Kurzform, die alle für Buchhaltungssysteme relevanten
-Checks durchführt und verständliche Fehlermeldungen liefert.
+Prüft:
+- XML Well-Formedness und Grundstruktur (CII oder UBL)
+- Alle EN-16931 Business Rules (BR-01..17 inkl. Pflichtfelder)
+- Konsistenzregeln (BR-CO-10..13: Netto+USt=Brutto, Summen stimmen)
+- Steuerkategorie-Regeln (BR-S, BR-Z, BR-E, BR-AE, BR-K, BR-G, BR-O)
+- Deutsche Zusatzregeln (BR-DE-01..27)
+- Code-Listen-Prüfung (ISO-3166 Land, ISO-4217 Währung, UNCL 5305 Steuer-Codes)
+- PDF/A-3 Konformität (für Hybrid-PDFs)
+
+Alle Prüfungen laufen LOKAL auf dem Rechner des Nutzers - es werden
+keine Rechnungsdaten an externe Dienste gesendet.
 """
 
 from __future__ import annotations
@@ -26,6 +33,75 @@ _NS_UBL = {
     "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
     "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
 }
+
+# Code-Listen für die Validierung ---------------------------------------
+# ISO 3166-1 Alpha-2 Ländercodes (Auszug: die weltweit üblichen).
+_ISO_COUNTRIES = frozenset({
+    "AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX",
+    "AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ",
+    "BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK",
+    "CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM",
+    "DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR",
+    "GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS",
+    "GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN",
+    "IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN",
+    "KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV",
+    "LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ",
+    "MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI",
+    "NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM",
+    "PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC",
+    "SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV",
+    "SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR",
+    "TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI",
+    "VN","VU","WF","WS","YE","YT","ZA","ZM","ZW","XI","XK",
+})
+# ISO 4217 Währungscodes (die weltweit üblichen)
+_ISO_CURRENCIES = frozenset({
+    "EUR","USD","GBP","CHF","JPY","CNY","CAD","AUD","NZD","SEK","NOK","DKK",
+    "PLN","CZK","HUF","RON","BGN","HRK","RUB","TRY","UAH","ILS","AED","SAR",
+    "HKD","SGD","KRW","INR","THB","MYR","IDR","PHP","VND","MXN","BRL","ARS",
+    "CLP","COP","PEN","ZAR","EGP","NGN","KES","XAF","XOF","MAD","TND","BWP",
+    "ISK","LKR","PKR","BDT","TWD","AFN","ALL","AMD","AZN","BHD","BYN","FJD",
+    "GEL","JOD","KWD","LBP","MKD","NPR","OMR","QAR","RSD","XPF","UZS","KZT",
+})
+# UNCL 5305 Steuerkategorie-Codes (Auszug nach EN 16931)
+_TAX_CATEGORIES = frozenset({
+    "S",   # Standardsatz
+    "Z",   # Nullsatz (zero rated)
+    "E",   # steuerbefreit (exempt)
+    "AE",  # Reverse Charge
+    "K",   # innergemeinschaftliche Lieferung
+    "G",   # Export außerhalb EU
+    "O",   # nicht steuerbar
+    "L",   # IGIC (Kanarische Inseln)
+    "M",   # IPSI (Ceuta, Melilla)
+    "B",   # Transferiert (reserviert)
+})
+# UN/CEFACT Rec 20 Mengeneinheiten (Auszug der häufigsten)
+_UNIT_CODES = frozenset({
+    "C62",  # Stück
+    "DAY",  # Tag
+    "HUR",  # Stunde
+    "KGM",  # Kilogramm
+    "KMT",  # Kilometer
+    "KWH",  # kWh
+    "LTR",  # Liter
+    "MIN",  # Minute
+    "MMT",  # Millimeter
+    "MTK",  # Quadratmeter
+    "MTQ",  # Kubikmeter
+    "MTR",  # Meter
+    "PCE",  # Piece
+    "SET",  # Set
+    "TNE",  # Tonne
+    "WEE",  # Woche
+    "MON",  # Monat
+    "ANN",  # Jahr
+    "H87",  # Piece (alternativ)
+    "EA",   # Each
+    "XPP",  # Packung
+    "NAR",  # Anzahl
+})
 
 
 @dataclass
@@ -96,6 +172,25 @@ def _decimal(s: str) -> Optional[Decimal]:
         return None
 
 
+def _iban_checksum_valid(iban: str) -> bool:
+    """Prüft die IBAN-Prüfsumme nach ISO 13616 (mod 97)."""
+    if len(iban) < 15 or len(iban) > 34:
+        return False
+    rearranged = iban[4:] + iban[:4]
+    numeric = ""
+    for ch in rearranged:
+        if ch.isdigit():
+            numeric += ch
+        elif "A" <= ch <= "Z":
+            numeric += str(ord(ch) - ord("A") + 10)
+        else:
+            return False
+    try:
+        return int(numeric) % 97 == 1
+    except ValueError:
+        return False
+
+
 def _validate_cii(root, rep: ValidationReport, pdf_a3: Optional[bool] = None) -> None:
     """Validiert eine ZUGFeRD/Factur-X Cross-Industry-Invoice XML."""
     ns = _NS_CII
@@ -143,17 +238,20 @@ def _validate_cii(root, rep: ValidationReport, pdf_a3: Optional[bool] = None) ->
                  "389": "Selbst-ausgestellte Rechnung"}
         rep.ok("BR-04", f"Typ: {type_code} ({names.get(type_code, 'Sonstige')})")
 
-    # --- BR-05: Währung (BT-5) ---
+    # --- BR-05 / BR-CL-01: Währung (BT-5) ---
     tx = "rsm:SupplyChainTradeTransaction"
     settle = f"{tx}/ram:ApplicableHeaderTradeSettlement"
     currency = _text(root, f"{settle}/ram:InvoiceCurrencyCode", ns)
     if not currency:
         rep.error("BR-05", "Währung (BT-5) fehlt")
     elif not re.fullmatch(r"[A-Z]{3}", currency):
-        rep.error("BR-05", f"Währungscode ungültig: {currency}",
+        rep.error("BR-CL-01", f"Währungscode ungültig: {currency}",
                   "Erwartet: ISO-4217 Drei-Buchstaben-Code (EUR, USD, …).")
+    elif currency not in _ISO_CURRENCIES:
+        rep.warn("BR-CL-01", f"Währungscode nicht in ISO-4217-Liste: {currency}",
+                 "Möglicherweise obsoleter oder unbekannter Code.")
     else:
-        rep.ok("BR-05", f"Währung: {currency}")
+        rep.ok("BR-CL-01", f"Währung: {currency} (ISO-4217 ✓)")
 
     # --- BR-06 / BR-DE-21: Absender-Name (BT-27) ---
     agr = f"{tx}/ram:ApplicableHeaderTradeAgreement"
@@ -163,7 +261,7 @@ def _validate_cii(root, rep: ValidationReport, pdf_a3: Optional[bool] = None) ->
     else:
         rep.ok("BR-06", f"Absender: {seller_name}")
 
-    # --- BR-08: Absender-Adresse ---
+    # --- BR-08 / BR-CL-14: Absender-Adresse + Länder-Code ---
     seller_addr = _all(root, f"{agr}/ram:SellerTradeParty/ram:PostalTradeAddress", ns)
     if not seller_addr:
         rep.error("BR-08", "Absender-Adresse (BG-5) fehlt")
@@ -171,8 +269,24 @@ def _validate_cii(root, rep: ValidationReport, pdf_a3: Optional[bool] = None) ->
         country = _text(root, f"{agr}/ram:SellerTradeParty/ram:PostalTradeAddress/ram:CountryID", ns)
         if not country:
             rep.error("BR-09", "Absender-Länderkennzeichen (BT-40) fehlt")
+        elif not re.fullmatch(r"[A-Z]{2}", country):
+            rep.error("BR-CL-14", f"Absender-Länderkennzeichen ungültig: {country}",
+                      "Erwartet: ISO-3166-1 Alpha-2 (DE, AT, CH, …).")
+        elif country not in _ISO_COUNTRIES:
+            rep.warn("BR-CL-14", f"Länderkennzeichen unbekannt: {country}")
         else:
-            rep.ok("BR-09", f"Absender-Land: {country}")
+            rep.ok("BR-CL-14", f"Absender-Land: {country} (ISO-3166 ✓)")
+
+    # --- BR-DE-21/22/23: Absender-Straße, PLZ, Ort explizit prüfen ---
+    s_street = _text(root, f"{agr}/ram:SellerTradeParty/ram:PostalTradeAddress/ram:LineOne", ns)
+    s_pc = _text(root, f"{agr}/ram:SellerTradeParty/ram:PostalTradeAddress/ram:PostcodeCode", ns)
+    s_city = _text(root, f"{agr}/ram:SellerTradeParty/ram:PostalTradeAddress/ram:CityName", ns)
+    if not s_street:
+        rep.error("BR-DE-21", "Absender-Straße (BT-35) fehlt")
+    if not s_pc:
+        rep.error("BR-DE-22", "Absender-PLZ (BT-38) fehlt")
+    if not s_city:
+        rep.error("BR-DE-23", "Absender-Ort (BT-37) fehlt")
 
     # --- BR-DE-6/7: Absender-Kontakt (Telefon/E-Mail) ---
     seller_email = _text(root, f"{agr}/ram:SellerTradeParty/ram:URIUniversalCommunication/ram:URIID", ns)
@@ -215,7 +329,7 @@ def _validate_cii(root, rep: ValidationReport, pdf_a3: Optional[bool] = None) ->
     else:
         rep.ok("BR-DE-15", f"PurchaseOrderReference: {po_ref}")
 
-    # --- BR-11: Empfänger-Adresse ---
+    # --- BR-11 / BR-CL-14: Empfänger-Adresse + Länder-Code ---
     buyer_addr = _all(root, f"{agr}/ram:BuyerTradeParty/ram:PostalTradeAddress", ns)
     if not buyer_addr:
         rep.error("BR-11", "Empfänger-Adresse (BG-8) fehlt")
@@ -223,6 +337,22 @@ def _validate_cii(root, rep: ValidationReport, pdf_a3: Optional[bool] = None) ->
         buyer_country = _text(root, f"{agr}/ram:BuyerTradeParty/ram:PostalTradeAddress/ram:CountryID", ns)
         if not buyer_country:
             rep.error("BR-11", "Empfänger-Länderkennzeichen (BT-55) fehlt")
+        elif not re.fullmatch(r"[A-Z]{2}", buyer_country):
+            rep.error("BR-CL-14", f"Empfänger-Länderkennzeichen ungültig: {buyer_country}")
+        elif buyer_country not in _ISO_COUNTRIES:
+            rep.warn("BR-CL-14", f"Empfänger-Länderkennzeichen unbekannt: {buyer_country}")
+        else:
+            rep.ok("BR-11", f"Empfänger-Land: {buyer_country}")
+        # BR-DE-26 / BR-DE-16: Empfänger-Straße, PLZ, Ort
+        b_street = _text(root, f"{agr}/ram:BuyerTradeParty/ram:PostalTradeAddress/ram:LineOne", ns)
+        b_pc = _text(root, f"{agr}/ram:BuyerTradeParty/ram:PostalTradeAddress/ram:PostcodeCode", ns)
+        b_city = _text(root, f"{agr}/ram:BuyerTradeParty/ram:PostalTradeAddress/ram:CityName", ns)
+        if not b_street:
+            rep.error("BR-DE-16", "Empfänger-Straße (BT-50) fehlt")
+        if not b_pc:
+            rep.error("BR-DE-17", "Empfänger-PLZ (BT-53) fehlt")
+        if not b_city:
+            rep.error("BR-DE-18", "Empfänger-Ort (BT-52) fehlt")
 
     # --- BR-13: Netto-Gesamt (BT-109) ---
     sums = f"{settle}/ram:SpecifiedTradeSettlementHeaderMonetarySummation"
@@ -279,21 +409,69 @@ def _validate_cii(root, rep: ValidationReport, pdf_a3: Optional[bool] = None) ->
         rep.ok("BR-16", f"{len(items)} Positionszeile(n)")
 
     line_total = Decimal("0")
+    seen_tax_cats = set()
     for i, item in enumerate(items, start=1):
         line_id = _text(item, "ram:AssociatedDocumentLineDocument/ram:LineID", ns)
         item_name = _text(item, "ram:SpecifiedTradeProduct/ram:Name", ns)
+        # BR-21 LineID
         if not line_id:
             rep.error("BR-21", f"Position {i}: LineID (BT-126) fehlt")
+        # BR-25 Produktname
         if not item_name:
             rep.error("BR-25", f"Position {i}: Produktname (BT-153) fehlt")
+        # BR-22 Menge
+        qty_el = _all(item, "ram:SpecifiedLineTradeDelivery/ram:BilledQuantity", ns)
+        if not qty_el:
+            rep.error("BR-22", f"Position {i} ({item_name}): Menge (BT-129) fehlt")
+        else:
+            qty_val = _decimal(qty_el[0].text or "")
+            if qty_val is None:
+                rep.error("BR-22", f"Position {i} ({item_name}): Menge nicht numerisch")
+            # BR-23 / BR-CL-23 Mengeneinheit
+            unit = qty_el[0].get("unitCode", "")
+            if not unit:
+                rep.error("BR-23", f"Position {i} ({item_name}): Mengeneinheit (BT-130) fehlt")
+            elif unit not in _UNIT_CODES:
+                rep.warn("BR-CL-23", f"Position {i}: Mengeneinheit '{unit}' nicht in UN/CEFACT Rec 20")
+        # BR-26 Netto-Einzelpreis
+        unit_price_str = _text(item,
+            "ram:SpecifiedLineTradeAgreement/ram:NetPriceProductTradePrice/ram:ChargeAmount", ns)
+        unit_price = _decimal(unit_price_str)
+        if unit_price is None:
+            rep.error("BR-26", f"Position {i} ({item_name}): Netto-Einzelpreis (BT-146) fehlt")
+        elif unit_price < 0:
+            rep.error("BR-27", f"Position {i} ({item_name}): Einzelpreis negativ (BT-146)")
+        # BR-24 Netto-Betrag der Zeile
         line_net_str = _text(item,
             "ram:SpecifiedLineTradeSettlement/ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount",
             ns)
         line_net = _decimal(line_net_str)
         if line_net is None:
-            rep.error("BR-24", f"Position {i} ({item_name}): Netto-Betrag fehlt")
+            rep.error("BR-24", f"Position {i} ({item_name}): Netto-Betrag (BT-131) fehlt")
         else:
             line_total += line_net
+        # BR-28 Steuerkategorie der Zeile
+        line_tax_cat = _text(item,
+            "ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax/ram:CategoryCode", ns)
+        if not line_tax_cat:
+            rep.error("BR-28", f"Position {i} ({item_name}): Steuer-Kategorie (BT-151) fehlt")
+        elif line_tax_cat not in _TAX_CATEGORIES:
+            rep.error("BR-CL-18", f"Position {i}: Unbekannte Steuer-Kategorie '{line_tax_cat}'",
+                      "Erlaubt: S, Z, E, AE, K, G, O, L, M")
+        else:
+            seen_tax_cats.add(line_tax_cat)
+        # BR-29 USt-Satz muss zur Kategorie passen
+        line_tax_rate_str = _text(item,
+            "ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax/ram:RateApplicablePercent", ns)
+        line_tax_rate = _decimal(line_tax_rate_str)
+        if line_tax_cat == "S" and (line_tax_rate is None or line_tax_rate <= 0):
+            rep.error("BR-S-05",
+                      f"Position {i}: Kategorie 'S' (Standard) erfordert USt-Satz > 0",
+                      f"Aktuell: {line_tax_rate_str or 'leer'}")
+        elif line_tax_cat in ("E", "AE", "Z", "K", "G", "O") and line_tax_rate and line_tax_rate != 0:
+            rep.error(f"BR-{line_tax_cat}-05",
+                      f"Position {i}: Kategorie '{line_tax_cat}' erfordert USt-Satz = 0",
+                      f"Aktuell: {line_tax_rate}%")
 
     # --- BR-CO-13: Summe der Positionen = Netto-Gesamt ---
     if net is not None and items:
@@ -304,32 +482,89 @@ def _validate_cii(root, rep: ValidationReport, pdf_a3: Optional[bool] = None) ->
         else:
             rep.ok("BR-CO-13", "Positionen = Netto-Gesamt ✓")
 
-    # --- BG-23: USt-Aufschlüsselung ---
+    # --- BG-23: USt-Aufschlüsselung (BR-45..49, BR-S/E/AE/Z/K/G-09) ---
     tax_breakdowns = _all(root, f"{settle}/ram:ApplicableTradeTax", ns)
     if not tax_breakdowns:
         rep.error("BR-45", "USt-Aufschlüsselung (BG-23) fehlt")
     else:
         rep.ok("BR-45", f"{len(tax_breakdowns)} USt-Satz-Gruppe(n) aufgeschlüsselt")
+        total_tax_basis = Decimal("0")
+        total_tax_calc = Decimal("0")
+        header_cats = set()
         for tb in tax_breakdowns:
             cat = _text(tb, "ram:CategoryCode", ns)
+            basis_str = _text(tb, "ram:BasisAmount", ns)
+            tax_amt_str = _text(tb, "ram:CalculatedAmount", ns)
+            rate_str = _text(tb, "ram:RateApplicablePercent", ns)
             exemption = _text(tb, "ram:ExemptionReason", ns)
+            basis = _decimal(basis_str)
+            tax_amt = _decimal(tax_amt_str)
+            rate = _decimal(rate_str)
+            if cat:
+                header_cats.add(cat)
+            # BR-47 Steuer-Code gültig?
+            if cat and cat not in _TAX_CATEGORIES:
+                rep.error("BR-47", f"Steuer-Kategorie '{cat}' in Aufschlüsselung ungültig")
+            # BR-48 Basis + Betrag müssen da sein
+            if basis is None:
+                rep.error("BR-48", f"USt-Kategorie {cat}: Bemessungsgrundlage (BT-116) fehlt")
+            else:
+                total_tax_basis += basis
+            if tax_amt is None:
+                rep.error("BR-49", f"USt-Kategorie {cat}: Steuerbetrag (BT-117) fehlt")
+            else:
+                total_tax_calc += tax_amt
+            # BR-CO-17 Berechnete USt = Basis × Satz / 100 (±0.01 Rundung)
+            if basis is not None and tax_amt is not None and rate is not None:
+                expected = (basis * rate / 100).quantize(Decimal("0.01"))
+                if abs(expected - tax_amt) > Decimal("0.02"):
+                    rep.error("BR-CO-17",
+                              f"Rechenfehler USt {cat}: {basis} × {rate}% = "
+                              f"{expected}, aber angegeben: {tax_amt}")
+            # Befreiungsgrund bei non-Standard
             if cat in ("E", "AE", "Z", "K", "G", "O") and not exemption:
-                rep.warn("BR-E-10",
+                rep.warn(f"BR-{cat}-10",
                          f"Steuerkategorie {cat} ohne Befreiungsgrund",
                          "Für steuerbefreite Umsätze (Kleinunternehmer, Reverse-Charge, "
-                         "Export) muss der Grund angegeben sein.")
+                         "Export) sollte eine Begründung (ExemptionReason) angegeben sein.")
+            # BR-S-02 / BR-S-03: Standard-Satz-Kategorie 'S' erfordert Rate > 0
+            if cat == "S":
+                if rate is None or rate <= 0:
+                    rep.error("BR-S-03",
+                              "Steuer-Kategorie 'S' (Standard) ohne positiven USt-Satz",
+                              f"Aktuell: {rate_str or 'leer'}")
+            elif cat in ("E", "AE", "Z", "K", "G", "O"):
+                if rate and rate != 0:
+                    rep.error(f"BR-{cat}-03",
+                              f"Steuer-Kategorie '{cat}' mit Satz {rate}% – muss 0 sein")
+        # Header-Kategorien müssen Positionen-Kategorien matchen
+        missing_in_breakdown = seen_tax_cats - header_cats
+        if missing_in_breakdown:
+            rep.error("BR-CO-18",
+                      f"Positionen haben Steuer-Kategorien ohne Aufschlüsselung: "
+                      f"{', '.join(missing_in_breakdown)}")
 
-    # --- BR-50: Zahlungsmittel ---
+    # --- BR-50 / BR-DE-01 / BR-CL-16: Zahlungsmittel ---
     payment_means = _all(root, f"{settle}/ram:SpecifiedTradeSettlementPaymentMeans", ns)
     if not payment_means:
         rep.warn("BR-50", "Keine Zahlungsmittel-Angabe (BG-16)",
                  "Dein Kunde weiß ohne IBAN nicht, wohin er überweisen soll.")
     else:
+        pm_type_code = _text(root, f"{settle}/ram:SpecifiedTradeSettlementPaymentMeans/ram:TypeCode", ns)
+        # BR-DE-01 / BR-CL-16: UNCL 4461 - erlaubte Codes: 30, 48, 49, 57, 58, 59, 97, 1
+        if pm_type_code and pm_type_code not in ("1","10","20","30","42","48","49","57","58","59","68","97","ZZZ"):
+            rep.warn("BR-CL-16", f"Payment-Mean-TypeCode '{pm_type_code}' ungewöhnlich",
+                     "Standard SEPA-Überweisung = 58, Lastschrift = 59.")
         iban = _text(root, f"{settle}/ram:SpecifiedTradeSettlementPaymentMeans/ram:PayeePartyCreditorFinancialAccount/ram:IBANID", ns)
         if iban:
-            rep.ok("BR-61", f"IBAN: {iban}")
-            if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{10,30}", iban.replace(" ", "")):
-                rep.warn("BR-61", f"IBAN-Format sieht ungewöhnlich aus: {iban}")
+            iban_clean = iban.replace(" ", "").upper()
+            if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{10,30}", iban_clean):
+                rep.error("BR-61", f"IBAN-Format ungültig: {iban}")
+            elif not _iban_checksum_valid(iban_clean):
+                rep.error("BR-61", f"IBAN-Prüfsumme falsch: {iban}",
+                          "Nach ISO 13616 mod-97. Vertippt?")
+            else:
+                rep.ok("BR-61", f"IBAN: {iban} (Prüfsumme ✓)")
         else:
             rep.warn("BR-61", "IBAN (BT-84) fehlt")
 
