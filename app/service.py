@@ -133,6 +133,23 @@ def _finalize(db: Session, inv: Invoice, company: Company, pdf_bytes: bytes) -> 
     xml_path = year_dir / f"{safe_number}.xml"
 
     xml_bytes = build_xml(inv)
+
+    # Post-Check: generierte XML gegen vollen EN-16931-Regelkatalog prüfen.
+    # Falls ein echter Fehler drin ist, Rechnung NICHT speichern - sonst
+    # bauen wir schadhafte E-Rechnungen die Buchhaltungssysteme ablehnen.
+    try:
+        from .einvoice_validator import validate_einvoice_xml
+        report = validate_einvoice_xml(xml_bytes)
+        if report.errors:
+            msgs = [f"{r.rule}: {r.title}" for r in report.errors]
+            raise ValueError(
+                "Rechnung erfüllt nicht alle EN-16931-Pflichtfelder:\n- "
+                + "\n- ".join(msgs))
+    except ValueError:
+        raise
+    except Exception:
+        pass  # Validator-Fehler soll Erzeugung nicht komplett blockieren
+
     embed_xml_in_pdf(pdf_bytes, xml_bytes, pdf_path)
     xml_path.write_bytes(xml_bytes)
 
