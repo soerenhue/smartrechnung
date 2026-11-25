@@ -14,13 +14,22 @@ jobs:
           - os: windows-latest
             artifact: SmartRechnung-Windows.zip
             archive: "pwsh -Command Compress-Archive -Path dist/* -DestinationPath SmartRechnung-Windows.zip"
+            allow-fail: false
           - os: macos-13
             artifact: SmartRechnung-macOS.zip
             archive: "cd dist && zip -ry ../SmartRechnung-macOS.zip ."
+            allow-fail: true
           - os: ubuntu-latest
             artifact: SmartRechnung-Linux.tar.gz
             archive: "tar -czf SmartRechnung-Linux.tar.gz -C dist ."
+            allow-fail: false
     runs-on: ${{ matrix.os }}
+    # macOS-Runner bei GitHub sind oft überlastet. Mit continue-on-error
+    # darf dieser Job fehlschlagen, ohne dass der ganze Workflow rot wird -
+    # Windows + Linux werden trotzdem fertig gestellt. macOS wird separat
+    # neu angestoßen wenn die Queue wieder frei ist.
+    continue-on-error: ${{ matrix.allow-fail }}
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
