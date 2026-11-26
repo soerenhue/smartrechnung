@@ -634,10 +634,68 @@ def _validate_ubl(root, rep: ValidationReport) -> None:
             rep.error(bt.split()[0], f"{bt} fehlt")
 
 
+def _run_official_schematron(xml_bytes: bytes, rep: ValidationReport,
+                             kind: str) -> None:
+    """Führt die offiziellen EN-16931-Schematron-Regeln aus - gleicher
+    Regelsatz, den die KoSIT-Validator-Konfiguration für XRechnung nutzt.
+    Diese ~200 Regeln liegen als vorkompilierte XSLT-Datei bei und werden
+    mit lxml direkt lokal ausgeführt - KEINE Daten verlassen den Rechner.
+    """
+    from pathlib import Path as _Path
+    rules_dir = _Path(__file__).parent / "validation_rules"
+    xslt_file = rules_dir / ("cii-en16931.xslt" if kind == "cii" else "ubl-en16931.xslt")
+    if not xslt_file.exists():
+        rep.warn("Schematron",
+                 "Offizielle EN-16931-Schematron-Regeln nicht eingebunden",
+                 "Fallback auf die eingebauten ~75 Regeln. Für vollständige "
+                 "Prüfung: XSLT-Datei bereitstellen.")
+        return
+    try:
+        xslt_doc = etree.parse(str(xslt_file))
+        transform = etree.XSLT(xslt_doc)
+        xml_doc = etree.fromstring(xml_bytes)
+        result = transform(xml_doc)
+    except Exception as e:
+        rep.warn("Schematron", "Offizielle Schematron-Prüfung konnte nicht laufen",
+                 f"{type(e).__name__}: {e}")
+        return
+
+    # SVRL-Namespace: Schematron Validation Reporting Language
+    svrl_ns = {"svrl": "http://purl.oclc.org/dsdl/svrl"}
+    failed = result.xpath("//svrl:failed-assert", namespaces=svrl_ns)
+    successful = result.xpath("//svrl:successful-report", namespaces=svrl_ns)
+    fired = result.xpath("//svrl:fired-rule", namespaces=svrl_ns)
+    total_rules = len(fired)
+
+    for assertion in failed:
+        rule_id = assertion.get("id", assertion.get("test", "SCH-?")[:40])
+        flag = assertion.get("flag", "fatal")
+        text_el = assertion.find("svrl:text", svrl_ns)
+        msg = (text_el.text or "").strip() if text_el is not None else "Regelverletzung"
+        msg = " ".join(msg.split())  # Mehrfach-Whitespace kollabieren
+        title = msg[:120] + ("…" if len(msg) > 120 else "")
+        level = "warn" if flag.lower() == "warning" else "error"
+        rep.add(level, f"SCH-{rule_id}", title, msg)
+
+    for note in successful:
+        rule_id = note.get("id", "INFO")
+        text_el = note.find("svrl:text", svrl_ns)
+        msg = (text_el.text or "").strip() if text_el is not None else ""
+        if msg:
+            rep.warn(f"SCH-{rule_id}", msg[:120])
+
+    if total_rules > 0 and not failed:
+        rep.ok("Schematron-EN16931",
+               f"Alle {total_rules} offiziellen EN-16931-Schematron-Regeln bestanden "
+               "(dieselben Regeln wie KoSIT-Validator)")
+
+
 def validate_einvoice_xml(xml_bytes: bytes,
                           source_kind: str = "",
-                          pdf_a3: Optional[bool] = None) -> ValidationReport:
-    """Validiert eine E-Rechnungs-XML gegen EN 16931 + BR-DE + BR-CO."""
+                          pdf_a3: Optional[bool] = None,
+                          run_schematron: bool = True) -> ValidationReport:
+    """Validiert eine E-Rechnungs-XML gegen EN 16931 + BR-DE + BR-CO +
+    offizielle Schematron-Regeln (identisch zu KoSIT-Validator)."""
     rep = ValidationReport()
 
     try:
@@ -649,8 +707,12 @@ def validate_einvoice_xml(xml_bytes: bytes,
     tag = etree.QName(root).localname
     if tag == "CrossIndustryInvoice":
         _validate_cii(root, rep, pdf_a3=pdf_a3)
+        if run_schematron:
+            _run_official_schematron(xml_bytes, rep, "cii")
     elif tag == "Invoice":
         _validate_ubl(root, rep)
+        if run_schematron:
+            _run_official_schematron(xml_bytes, rep, "ubl")
     else:
         rep.error("Format",
                   f"Unbekanntes XML-Format: <{tag}>",

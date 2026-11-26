@@ -36,6 +36,7 @@ datas += collect_data_files("fastapi")
 datas += collect_data_files("starlette")
 datas += collect_data_files("playwright")
 datas += [("app/templates", "app/templates")]
+datas += [("app/validation_rules", "app/validation_rules")]
 
 # Chromium wird NICHT durch PyInstaller gepackt - PyInstaller versucht
 # sonst Chromium.app selbst zu signieren, was scheitert (Chromium hat
